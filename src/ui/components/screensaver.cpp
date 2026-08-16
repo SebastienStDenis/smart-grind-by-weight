@@ -28,11 +28,14 @@ constexpr int kMaxGroupedRows = 4;
 constexpr int kMaxBoardRows = 6;
 constexpr int kCatchDotSizePx = 6;
 
-// Countdowns follow the MTA platform clocks: big bare minutes, with a single
-// tiny "min" as a column header (board) or row label (grouped tiles)
+// Countdowns follow the MTA platform clocks: big bare minutes in rounded
+// tiles, with a single tiny "mins" as a column header (board) or row label
+// (grouped). The header's line box carries more air below its glyphs than
+// the rows need, so it is pulled back up by kBoardHeaderTuckPx
 constexpr int kCountdownTileRadiusPx = 10;
 constexpr int kCountdownTilePadPx = 6;
-constexpr int kCatchDotGapPx = 4;
+constexpr int kCatchDotGapPx = 6;
+constexpr int kBoardHeaderTuckPx = 16;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_28;
@@ -76,7 +79,7 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
 }
 
 // Tiny dot flagging a rushed or missed catch
-lv_obj_t* make_catch_dot(lv_obj_t* parent, uint32_t color) {
+void make_catch_dot(lv_obj_t* parent, uint32_t color) {
     lv_obj_t* dot = lv_obj_create(parent);
     lv_obj_set_size(dot, kCatchDotSizePx, kCatchDotSizePx);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
@@ -85,7 +88,6 @@ lv_obj_t* make_catch_dot(lv_obj_t* parent, uint32_t color) {
     lv_obj_set_style_border_width(dot, 0, 0);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
-    return dot;
 }
 
 lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap) {
@@ -142,62 +144,39 @@ void make_route_badge(lv_obj_t* parent, const TrainArrivalItem& item) {
     lv_obj_align(badge_label, LV_ALIGN_CENTER, 0, kBadgeGlyphNudgePx);
 }
 
-// Tiny muted "min" caption
+// Tiny muted "mins" caption
 lv_obj_t* make_unit_label(lv_obj_t* parent) {
     lv_obj_t* label = lv_label_create(parent);
-    lv_label_set_text(label, "min");
+    lv_label_set_text(label, "mins");
     lv_obj_set_style_text_font(label, kCountdownUnitFont, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(THEME_COLOR_TEXT_SECONDARY), 0);
     return label;
 }
 
-// Minutes centered in a column at least two digits wide so short countdowns
-// take the same room as long ones. The catch dot floats in extra left padding
-// right beside the digits, centered on them, so it never shifts the number;
-// that slot is always reserved when reserve_dot_slot is set (keeps the
-// board's numbers aligned) and only added when a dot is shown otherwise
-// (keeps the tiles symmetric)
-lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
-                         const lv_font_t* font, int32_t pad_hor, bool reserve_dot_slot) {
-    char mins_text[4];
-    snprintf(mins_text, sizeof(mins_text), "%u", mins);
-    lv_point_t two_digits;
-    lv_point_t digits;
-    lv_text_get_size(&two_digits, "00", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    lv_text_get_size(&digits, mins_text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    int32_t content_width = std::max(two_digits.x, digits.x);
+// Rounded tile holding the minutes and, when the catch is hard, a dot to
+// their left; the pair is centered with the same minimal side padding
+// whatever the digit count, so tiles are only as wide as their content
+lv_obj_t* make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
+                              const lv_font_t* font) {
+    lv_obj_t* tile = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
+    lv_obj_set_width(tile, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
+    lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
 
-    // Short numbers leave slack either side of the digits that the dot can
-    // use, so only the part it doesn't cover widens the column
-    int32_t slack = (content_width - digits.x) / 2;
-    int32_t dot_span = kCatchDotSizePx + kCatchDotGapPx;
     uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
-    bool has_dot = dot_color != kNoCatchWarning;
-    int32_t dot_slot = 0;
-    if (reserve_dot_slot) {
-        dot_slot = dot_span;
-    } else if (has_dot) {
-        dot_slot = std::max<int32_t>(0, dot_span - slack);
+    if (dot_color != kNoCatchWarning) {
+        make_catch_dot(tile, dot_color);
     }
 
-    lv_obj_t* column = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 0);
-    lv_obj_set_width(column, content_width + 2 * pad_hor + dot_slot);
-    lv_obj_set_style_pad_left(column, pad_hor + dot_slot, 0);
-    lv_obj_set_style_pad_right(column, pad_hor, 0);
-
-    lv_obj_t* mins_label = lv_label_create(column);
+    char mins_text[4];
+    snprintf(mins_text, sizeof(mins_text), "%u", mins);
+    lv_obj_t* mins_label = lv_label_create(tile);
     lv_label_set_text(mins_label, mins_text);
     lv_obj_set_style_text_font(mins_label, font, 0);
     lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
-
-    if (has_dot) {
-        lv_obj_t* dot = make_catch_dot(column, dot_color);
-        lv_obj_add_flag(dot, LV_OBJ_FLAG_FLOATING);
-        lv_obj_align(dot, LV_ALIGN_TOP_LEFT,
-                     (content_width - digits.x) / 2 - kCatchDotGapPx - kCatchDotSizePx,
-                     (lv_font_get_line_height(font) - kCatchDotSizePx) / 2);
-    }
-    return column;
+    return tile;
 }
 
 // Direction + optional station, stacked; grows to fill the space between the
@@ -666,11 +645,7 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 8);
         make_unit_label(tiles_row);
         for (int m = 0; m < entry.count; m++) {
-            lv_obj_t* tile = make_countdown(tiles_row, item, entry.mins[m], kTileCountdownFont,
-                                            kCountdownTilePadPx, false);
-            lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
-            lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
-            lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+            make_countdown_tile(tiles_row, item, entry.mins[m], kTileCountdownFont);
         }
     }
 
@@ -704,17 +679,14 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
     int first = board_page_ * rows_per_page;
     int last = std::min(entry_count, first + rows_per_page);
 
-    // "min" column header centered over the countdown digits, which sit in a
-    // two-digit-wide column at the row's right edge
+    // "mins" column header flush with the countdown digits at the right edge,
+    // pulled down close to the first tile
     if (last > first) {
-        lv_point_t two_digits;
-        lv_point_t unit;
-        lv_text_get_size(&two_digits, "00", kBoardCountdownFont, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        lv_text_get_size(&unit, "min", kCountdownUnitFont, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
         lv_obj_t* header = make_unit_label(parent);
         lv_obj_set_width(header, LV_PCT(100));
         lv_obj_set_style_text_align(header, LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_style_pad_right(header, (two_digits.x - unit.x) / 2, 0);
+        lv_obj_set_style_pad_right(header, kCountdownTilePadPx, 0);
+        lv_obj_set_style_margin_bottom(header, -kBoardHeaderTuckPx, 0);
     }
 
     for (int i = first; i < last; i++) {
@@ -723,8 +695,7 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         lv_obj_t* row = make_flex_container(parent, LV_FLEX_FLOW_ROW, 12);
         make_route_badge(row, item);
         make_watch_text_column(row, item);
-
-        make_countdown(row, item, entries[i].min, kBoardCountdownFont, 0, true);
+        make_countdown_tile(row, item, entries[i].min, kBoardCountdownFont);
     }
     return last - first;
 }
