@@ -90,9 +90,9 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "bullet text delete"
-      "bullet arrivals arrivals";
-    column-gap: 0.85rem; row-gap: 0.6rem;
+      "bullet text     delete"
+      "unit   arrivals arrivals";
+    column-gap: 0.85rem; row-gap: 0.5rem;
     align-items: start;
     padding: 0.9rem 0;
     border-bottom: 1px solid var(--border);
@@ -100,12 +100,18 @@
   li.watch:first-child { padding-top: 0.25rem; }
   li.watch:last-child { border-bottom: 0; }
   li.watch .bullet { grid-area: bullet; }
+  /* One tile tall so the caption stays level with the first row of tiles even
+     when the arrivals wrap to a second line on narrow phones */
+  li.watch .unit {
+    grid-area: unit; align-self: start; height: 2rem;
+    display: flex; align-items: center; justify-content: center;
+  }
   li.watch .text { grid-area: text; min-width: 0; padding-top: 0.15rem; }
   li.watch .direction { font-size: 1.1rem; font-weight: 600; overflow-wrap: anywhere; }
   li.watch .station { font-size: 0.95rem; color: var(--text-secondary); overflow-wrap: anywhere; }
   li.watch .arrivals {
     grid-area: arrivals;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.4rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
     min-width: 0;
   }
   li.watch .delete {
@@ -117,28 +123,31 @@
   li.watch .delete:hover { color: var(--error); background: var(--surface); }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
-  /* Arrival pills mirror the grinder's: content-sized on the pill background,
-     with a tiny muted dot before the number flagging a rushed or missed catch */
-  .pill {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    height: 1.85rem; padding: 0 0.6rem;
-    border-radius: 999px; background: var(--pill); color: var(--text);
-    font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
+     rounded tiles led by a single tiny "mins" label, with a small muted dot
+     before the number flagging a rushed or missed catch. Tiles are sized by
+     their content, so a single digit never pads out to a two-digit width. */
+  .unit { color: var(--text-secondary); font-size: 0.7rem; line-height: 1; }
+  .tile {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 2rem; padding: 0 8px;
+    border-radius: 10px; background: var(--pill); color: var(--text);
+    font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums;
   }
-  .pill .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-  .pill.rush .dot { background: var(--rush); }
-  .pill.miss .dot { background: var(--miss); }
+  .tile .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .tile.rush .dot { background: var(--rush); }
+  .tile.miss .dot { background: var(--miss); }
   .no-trains { color: var(--muted); font-size: 0.95rem; }
 
   .walk {
-    display: inline-flex; align-items: center; gap: 0.4rem;
+    display: inline-flex; align-items: center; gap: 0.35rem;
     margin-left: auto; color: var(--muted); font-size: 0.9rem; white-space: nowrap;
   }
   .walk input {
-    width: 3.4rem; height: 1.85rem; padding: 0 0.6rem;
+    width: 3.4rem; height: 2rem; padding: 0 0.5rem;
     text-align: right; font-size: 1rem; font-weight: 600;
     -moz-appearance: textfield; appearance: textfield;
-    border-radius: 999px; border: 0; background: var(--pill);
+    border-radius: 10px; border: 0; background: var(--pill);
   }
   .walk input::-webkit-outer-spin-button,
   .walk input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -263,10 +272,10 @@ function arrivalsEl(watch, mins, index) {
   if (!mins.length) row.append(el("span", { className: "no-trains" }, "No upcoming trains"));
   mins.forEach(m => {
     const flag = catchClass(watch.walk_min, m);
-    const pill = el("span", { className: "pill " + flag });
-    if (flag) pill.append(el("span", { className: "dot" }));
-    pill.append(`${m}m`);
-    row.append(pill);
+    const tile = el("span", { className: "tile " + flag });
+    if (flag) tile.append(el("span", { className: "dot" }));
+    tile.append(`${m}`);
+    row.append(tile);
   });
   row.append(walkControl(index, watch.walk_min));
   return row;
@@ -294,7 +303,7 @@ function walkControl(index, walkMin) {
     }
   };
   const control = el("label", { className: "walk" }, "Walk");
-  control.append(input, "min");
+  control.append(input, "mins");
   return control;
 }
 
@@ -319,7 +328,9 @@ async function refreshWatches() {
                 el("div", { className: "station" }, w.station));
     const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "✕");
     del.onclick = async () => { await api(`/api/watches/${i}`, { method: "DELETE" }); refreshWatches(); };
-    li.append(bullet(w.route), text, del, arrivalsEl(w, mins, i));
+    li.append(bullet(w.route), text, del,
+              el("span", { className: "unit" }, mins.length ? "mins" : ""),
+              arrivalsEl(w, mins, i));
     list.append(li);
   });
   if (arrivals.stale) setStatus("MTA data is stale or not yet fetched", "warn");
