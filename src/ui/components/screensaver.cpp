@@ -23,14 +23,10 @@ constexpr float kTwoPi = 6.28318530f;
 
 constexpr int kVariantCount = 3;
 
-// Taps starting within this distance of the screen's left/right edge switch
-// pages instead of dismissing
-constexpr int kEdgeTapZonePx = 48;
-
 constexpr int kBadgeSizePx = 52;
 constexpr int kMaxGroupedRows = 4;
 constexpr int kMaxBoardRows = 7;
-constexpr int kCatchRingWidthPx = 2;
+constexpr int kCatchDotSizePx = 6;
 
 // Page indicator dots stacked along the right edge of a multi-page trains
 // view; the rows shrink by the gutter width so nothing sits under the dots
@@ -70,18 +66,20 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
                                    : THEME_COLOR_SCREENSAVER_CATCH_MISS;
 }
 
-// Rings a pill in the warning color for a rushed or missed catch. Every pill
-// reserves the ring width (transparent when not flagged) so flagged pills stay
-// the same size as the rest of the row
-void apply_catch_ring(lv_obj_t* pill, uint8_t walk_min, uint8_t mins) {
-    lv_obj_set_style_border_width(pill, kCatchRingWidthPx, 0);
+// Tiny dot left of a countdown flagging a rushed or missed catch
+void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
     uint32_t color = arrival_catch_color(walk_min, mins);
     if (color == kNoCatchWarning) {
-        lv_obj_set_style_border_opa(pill, LV_OPA_TRANSP, 0);
         return;
     }
-    lv_obj_set_style_border_color(pill, lv_color_hex(color), 0);
-    lv_obj_set_style_border_opa(pill, LV_OPA_COVER, 0);
+    lv_obj_t* dot = lv_obj_create(parent);
+    lv_obj_set_size(dot, kCatchDotSizePx, kCatchDotSizePx);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
 }
 
 lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap) {
@@ -248,8 +246,12 @@ void ScreensaverOverlay::create() {
     lv_obj_set_style_pad_all(overlay_, 0, 0);
     lv_obj_set_scrollbar_mode(overlay_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
+    // Gestures bubble up from the tiles and stop here, so one handler covers
+    // swipes that start anywhere on the overlay
+    lv_obj_clear_flag(overlay_, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(overlay_, gesture_cb, LV_EVENT_GESTURE, this);
 
-    // Tiles are not draggable; edge taps slide between them programmatically
+    // Tiles are not draggable; a swipe jumps straight to the neighboring tile
     lv_obj_t** tiles[] = {&wave_tile_, &grouped_tile_, &board_tile_};
     for (int i = 0; i < kVariantCount; i++) {
         lv_obj_t* tile = lv_tileview_add_tile(overlay_, i, 0, LV_DIR_NONE);
@@ -305,7 +307,7 @@ void ScreensaverOverlay::show() {
     lv_tileview_set_tile_by_index(overlay_, variant, 0, LV_ANIM_OFF);
     lv_obj_move_foreground(overlay_);
     lv_obj_clear_flag(overlay_, LV_OBJ_FLAG_HIDDEN);
-    // Build both trains pages up front so a page slide never reveals a blank neighbor
+    // Build both trains pages up front so a swipe never reveals a blank page
     refresh_trains(true);
     start_variant();
 }
@@ -359,18 +361,19 @@ void ScreensaverOverlay::set_variant(ScreensaverVariant variant) {
     start_variant();
 }
 
-// Slides one page left (-1) or right (+1); taps past either end do nothing
+// Jumps one page left (-1) or right (+1) with no transition; swipes past
+// either end do nothing
 void ScreensaverOverlay::step_variant(int direction) {
     int index = static_cast<int>(variant_) + direction;
     if (index < 0 || index >= kVariantCount) {
         return;
     }
     set_variant(static_cast<ScreensaverVariant>(index));
-    lv_tileview_set_tile_by_index(overlay_, index, 0, LV_ANIM_ON);
+    lv_tileview_set_tile_by_index(overlay_, index, 0, LV_ANIM_OFF);
 }
 
-// Shows the next (+1) or previous (-1) page of the visible trains view;
-// swipes past either end do nothing
+// Renders the next (+1) or previous (-1) page of the visible trains view
+// outright; swipes past either end do nothing
 void ScreensaverOverlay::step_trains_page(int direction) {
     uint8_t* page = nullptr;
     uint8_t page_count = 1;
@@ -402,37 +405,46 @@ void ScreensaverOverlay::draw_cb(lv_event_t* e) {
 
 void ScreensaverOverlay::pressed_cb(lv_event_t* e) {
     auto* self = static_cast<ScreensaverOverlay*>(lv_event_get_user_data(e));
-    if (!self) {
-        return;
+    if (self) {
+        self->swiped_ = false;
     }
-    lv_indev_get_point(lv_indev_active(), &self->press_point_);
 }
 
-// A vertical swipe pages the trains list; otherwise where the finger first
-// landed decides the action, like a button, so a touch that wanders after
-// pressing an edge still switches variants
+// LVGL still reports a click when a swipe's finger lifts, so a touch that
+// paged must not also dismiss
 void ScreensaverOverlay::clicked_cb(lv_event_t* e) {
+    auto* self = static_cast<ScreensaverOverlay*>(lv_event_get_user_data(e));
+    if (!self || !self->visible_ || self->swiped_) {
+        return;
+    }
+    self->hide();
+}
+
+void ScreensaverOverlay::gesture_cb(lv_event_t* e) {
     auto* self = static_cast<ScreensaverOverlay*>(lv_event_get_user_data(e));
     if (!self || !self->visible_) {
         return;
     }
 
-    lv_dir_t gesture = lv_indev_get_gesture_dir(lv_indev_active());
-    if (gesture == LV_DIR_TOP) {
-        self->step_trains_page(1);
-        return;
-    }
-    if (gesture == LV_DIR_BOTTOM) {
-        self->step_trains_page(-1);
-        return;
-    }
-
-    if (self->press_point_.x < kEdgeTapZonePx) {
-        self->step_variant(-1);
-    } else if (self->press_point_.x >= HW_DISPLAY_WIDTH_PX - kEdgeTapZonePx) {
-        self->step_variant(1);
-    } else {
-        self->hide();
+    // Horizontal swipes switch screensaver pages, vertical swipes page the
+    // trains list
+    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+    self->swiped_ = true;
+    switch (dir) {
+        case LV_DIR_LEFT:
+            self->step_variant(1);
+            break;
+        case LV_DIR_RIGHT:
+            self->step_variant(-1);
+            break;
+        case LV_DIR_TOP:
+            self->step_trains_page(1);
+            break;
+        case LV_DIR_BOTTOM:
+            self->step_trains_page(-1);
+            break;
+        default:
+            break;
     }
 }
 
@@ -457,8 +469,8 @@ void ScreensaverOverlay::tick_cb(lv_timer_t* timer) {
 void ScreensaverOverlay::draw_wave(lv_layer_t* layer) {
     constexpr float kWaveNumber = kTwoPi / kWaveLengthPx;
 
-    // Anchor the grid to the tile's on-screen coordinates so the dots ride
-    // along while the tileview slides between pages
+    // Anchor the grid to the tile's on-screen coordinates rather than assuming
+    // the tile sits at the screen origin
     lv_area_t coords;
     lv_obj_get_coords(wave_tile_, &coords);
 
@@ -514,8 +526,8 @@ void ScreensaverOverlay::refresh_trains(bool force) {
     rebuild_trains_views(arrivals, have_data && staleness < 2, elapsed_min, staleness == 1);
 }
 
-// Both trains pages are rebuilt together so whichever one a page slide
-// reveals is already populated
+// Both trains pages are rebuilt together so whichever one a swipe reveals
+// is already populated
 void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, bool have_data,
                                               uint32_t elapsed_min, bool device_stale) {
     if (grouped_container_) {
@@ -590,17 +602,15 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
             char pill_text[8];
             snprintf(pill_text, sizeof(pill_text), "%um", entry.mins[m]);
 
-            lv_obj_t* pill = lv_obj_create(pills_row);
+            lv_obj_t* pill = make_flex_container(pills_row, LV_FLEX_FLOW_ROW, 4);
             lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
             lv_obj_set_style_bg_color(pill, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
             lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
             lv_obj_set_style_pad_hor(pill, 8, 0);
             lv_obj_set_style_pad_ver(pill, 0, 0);
-            lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
-            lv_obj_clear_flag(pill, LV_OBJ_FLAG_CLICKABLE);
-            apply_catch_ring(pill, item.walk_min, entry.mins[m]);
 
+            make_catch_dot(pill, item.walk_min, entry.mins[m]);
             lv_obj_t* pill_label = lv_label_create(pill);
             lv_label_set_text(pill_label, pill_text);
             lv_obj_set_style_text_font(pill_label, &lv_font_montserrat_24, 0);
@@ -645,17 +655,15 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        // No pill to ring on the board, so the countdown itself takes the color
         char mins_text[16];
         snprintf(mins_text, sizeof(mins_text), "%um", entries[i].min);
-        uint32_t catch_color = arrival_catch_color(item.walk_min, entries[i].min);
-        lv_obj_t* mins_label = lv_label_create(row);
+        lv_obj_t* countdown = make_flex_container(row, LV_FLEX_FLOW_ROW, 6);
+        lv_obj_set_width(countdown, LV_SIZE_CONTENT);
+        make_catch_dot(countdown, item.walk_min, entries[i].min);
+        lv_obj_t* mins_label = lv_label_create(countdown);
         lv_label_set_text(mins_label, mins_text);
         lv_obj_set_style_text_font(mins_label, &lv_font_montserrat_32, 0);
-        lv_obj_set_style_text_color(
-            mins_label,
-            lv_color_hex(catch_color == kNoCatchWarning ? THEME_COLOR_TEXT_PRIMARY : catch_color),
-            0);
+        lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
     }
     return last - first;
 }

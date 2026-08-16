@@ -6,13 +6,12 @@
 // Full-screen idle overlay: a horizontal tileview of three pages - an animated
 // dot-matrix ripple (Wave), subway arrivals from the train gateway grouped per
 // tracked watch (Trains grouped), and a flat time-sorted arrivals board
-// (Trains board). Tapping the screen's left or right edge slides to the
-// neighboring page (the shown page is persisted); a tap anywhere else
-// dismisses the overlay. All touches are swallowed before they reach the
-// widgets underneath.
+// (Trains board). Swiping left/right jumps to the neighboring page with no
+// transition (the shown page is persisted); a tap dismisses the overlay.
+// All touches are swallowed before they reach the widgets underneath.
 // Both trains views split rows that don't fit one screen across fixed pages:
-// swiping up/down on the screensaver renders the next/previous page outright
-// (no scrolling animation) and a dot column on the right marks the pages.
+// swiping up/down renders the next/previous page outright (no scrolling
+// animation) and a dot column on the right marks the pages.
 
 enum class ScreensaverVariant {
     WAVE = 0,
@@ -42,6 +41,7 @@ private:
     static void draw_cb(lv_event_t* e);
     static void pressed_cb(lv_event_t* e);
     static void clicked_cb(lv_event_t* e);
+    static void gesture_cb(lv_event_t* e);
     static void tick_cb(lv_timer_t* timer);
 
     void start_variant();
@@ -67,7 +67,7 @@ private:
     lv_timer_t* timer_ = nullptr;
     bool visible_ = false;
     ScreensaverVariant variant_ = ScreensaverVariant::WAVE;
-    lv_point_t press_point_ = {0, 0};
+    bool swiped_ = false;
     float phase_ = 0.0f;
     uint32_t rendered_fetch_ms_ = 0;
     NetworkState rendered_state_ = NetworkState::UNCONFIGURED;
