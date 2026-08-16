@@ -36,11 +36,12 @@ constexpr int kCatchDotSizePx = 6;
 constexpr int kCountdownTileRadiusPx = 10;
 constexpr int kCountdownTilePadPx = 8;
 constexpr int kCatchDotGapPx = 5;
-constexpr int kBoardHeaderTuckPx = 16;
+constexpr int kBoardHeaderTuckPx = 8;
 
-// Grouped entries (52px badge row + 2px + 30px tile row) are spaced so four
+// Grouped entries (52px badge row + tiles gap + 30px tile row) are spaced so four
 // of them span the page's 424px content height; fewer still stack from the top
-constexpr int kGroupedRowGapPx = 29;
+constexpr int kGroupedTilesGapPx = 8;
+constexpr int kGroupedRowGapPx = 21;
 constexpr int kBoardRowGapPx = 12;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
@@ -646,7 +647,7 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         const WatchEntry& entry = entries[i];
         const TrainArrivalItem& item = *entry.item;
 
-        lv_obj_t* entry_box = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 2);
+        lv_obj_t* entry_box = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, kGroupedTilesGapPx);
 
         lv_obj_t* row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 12);
         make_route_badge(row, item);
