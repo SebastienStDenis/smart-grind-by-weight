@@ -28,14 +28,20 @@ constexpr int kMaxGroupedRows = 4;
 constexpr int kMaxBoardRows = 6;
 constexpr int kCatchDotSizePx = 6;
 
-// Countdowns follow the MTA platform clocks: big bare minutes in rounded
-// tiles, with a single tiny "mins" as a column header (board) or row label
-// (grouped). The header's line box carries more air below its glyphs than
-// the rows need, so it is pulled back up by kBoardHeaderTuckPx
+// Countdowns follow the MTA platform clocks: big bare minutes, in rounded
+// tiles on the grouped view, with a single tiny "mins" as a column header
+// (board) or row label (grouped). The header's line box carries more air
+// below its glyphs than the rows need, so it is pulled back up by
+// kBoardHeaderTuckPx
 constexpr int kCountdownTileRadiusPx = 10;
-constexpr int kCountdownTilePadPx = 6;
-constexpr int kCatchDotGapPx = 6;
+constexpr int kCountdownTilePadPx = 8;
+constexpr int kCatchDotGapPx = 5;
 constexpr int kBoardHeaderTuckPx = 16;
+
+// Grouped entries (52px badge row + 2px + 30px tile row) are spaced so four
+// of them span the page's 424px content height; fewer still stack from the top
+constexpr int kGroupedRowGapPx = 29;
+constexpr int kBoardRowGapPx = 12;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_28;
@@ -153,30 +159,34 @@ lv_obj_t* make_unit_label(lv_obj_t* parent) {
     return label;
 }
 
-// Rounded tile holding the minutes and, when the catch is hard, a dot to
-// their left; the pair is centered with the same minimal side padding
-// whatever the digit count, so tiles are only as wide as their content
-lv_obj_t* make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
-                              const lv_font_t* font) {
-    lv_obj_t* tile = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
-    lv_obj_set_width(tile, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
-    lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
-    lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
-    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+// The minutes and, when the catch is hard, a dot to their left, only as wide
+// as their content
+lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
+                         const lv_font_t* font) {
+    lv_obj_t* countdown = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
+    lv_obj_set_width(countdown, LV_SIZE_CONTENT);
 
     uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
     if (dot_color != kNoCatchWarning) {
-        make_catch_dot(tile, dot_color);
+        make_catch_dot(countdown, dot_color);
     }
 
     char mins_text[4];
     snprintf(mins_text, sizeof(mins_text), "%u", mins);
-    lv_obj_t* mins_label = lv_label_create(tile);
+    lv_obj_t* mins_label = lv_label_create(countdown);
     lv_label_set_text(mins_label, mins_text);
     lv_obj_set_style_text_font(mins_label, font, 0);
     lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
-    return tile;
+    return countdown;
+}
+
+// Grouped-view countdown in a rounded tile
+void make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
+    lv_obj_t* tile = make_countdown(parent, item, mins, kTileCountdownFont);
+    lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
+    lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
 }
 
 // Direction + optional station, stacked; grows to fill the space between the
@@ -582,8 +592,8 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_container_ = nullptr;
     }
 
-    grouped_container_ = make_trains_page(grouped_tile_, 12);
-    board_container_ = make_trains_page(board_tile_, 12);
+    grouped_container_ = make_trains_page(grouped_tile_, kGroupedRowGapPx);
+    board_container_ = make_trains_page(board_tile_, kBoardRowGapPx);
 
     bool stale = arrivals.gateway_stale || device_stale;
     if (!have_data) {
@@ -642,10 +652,15 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
+        // The "mins" label sits centered under the route bullet and the tiles
+        // start where the text column does
         lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 8);
-        make_unit_label(tiles_row);
+        lv_obj_t* unit_label = make_unit_label(tiles_row);
+        lv_obj_set_width(unit_label, kBadgeSizePx);
+        lv_obj_set_style_text_align(unit_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_margin_right(unit_label, 4, 0);
         for (int m = 0; m < entry.count; m++) {
-            make_countdown_tile(tiles_row, item, entry.mins[m], kTileCountdownFont);
+            make_countdown_tile(tiles_row, item, entry.mins[m]);
         }
     }
 
@@ -680,12 +695,11 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
     int last = std::min(entry_count, first + rows_per_page);
 
     // "mins" column header flush with the countdown digits at the right edge,
-    // pulled down close to the first tile
+    // pulled down close to the first row
     if (last > first) {
         lv_obj_t* header = make_unit_label(parent);
         lv_obj_set_width(header, LV_PCT(100));
         lv_obj_set_style_text_align(header, LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_style_pad_right(header, kCountdownTilePadPx, 0);
         lv_obj_set_style_margin_bottom(header, -kBoardHeaderTuckPx, 0);
     }
 
@@ -695,7 +709,7 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         lv_obj_t* row = make_flex_container(parent, LV_FLEX_FLOW_ROW, 12);
         make_route_badge(row, item);
         make_watch_text_column(row, item);
-        make_countdown_tile(row, item, entries[i].min, kBoardCountdownFont);
+        make_countdown(row, item, entries[i].min, kBoardCountdownFont);
     }
     return last - first;
 }
