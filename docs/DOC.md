@@ -362,12 +362,12 @@ Need a simple live readout? Open **Menu → Scale** to jump into a full-screen w
 After 2 minutes without touch or scale activity, the screen dims and an animated screensaver appears. Configure it in **Menu → Display**:
 - **Enabled toggle**: when off, the screen only dims like before
 - **Preview**: starts the screensaver immediately; touch to dismiss
-- The screensaver has three pages: Wave (a brown dot-matrix ripple expanding from the center of the screen), Trains grouped (upcoming NYC subway arrivals from the MTA gateway, one entry per tracked watch), and Trains board (a flat departure board of the same arrivals). Tap the very left or right edge of the screen to slide to the previous or next page; the page you leave it on is remembered
+- The screensaver has three pages: Wave (a brown dot-matrix ripple expanding from the center of the screen), Trains grouped (upcoming NYC subway arrivals from the MTA gateway, one entry per tracked watch), and Trains board (a flat departure board of the same arrivals). Swipe left or right to switch to the next or previous page (the page changes instantly, with no slide animation); the page you leave it on is remembered
 - The trains board sorts all upcoming arrivals by time; each row shows the route bullet, direction, station name, and minutes until arrival ("Now" when due). Minutes count down locally between the 30-second gateway polls; if no poll succeeds for 90 seconds a stale-data warning appears, and after 5 minutes the board is replaced by the connection error state
 - If a watch has a walk time to the platform set (entered in the gateway's web UI), its arrival times are flagged by color: yellow when you'd have to rush to make the train, red when it can't be caught, and unflagged when you can make it at a normal walking pace. Watches without an estimate keep the normal white countdowns
 - The screensaver brightness slider controls how dim the screen gets while it plays
 
-Touching the screen anywhere away from the left/right edges wakes it instantly (the touch is swallowed, so nothing underneath gets pressed), and placing a cup or portafilter on the scale wakes it too. The screensaver never appears while grinding, during a manual run, or during an OTA update.
+Tapping the screen wakes it instantly (the touch is swallowed, so nothing underneath gets pressed), and placing a cup or portafilter on the scale wakes it too. The screensaver never appears while grinding, during a manual run, or during an OTA update.
 
 ---
 

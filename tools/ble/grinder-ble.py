@@ -142,6 +142,10 @@ DEVICE_NAME = "GrindByWeight"
 CHUNK_SIZE = 512
 DATA_CHUNK_SIZE = 500
 OTA_APPLY_TIMEOUT_S = 180
+LINK_UPGRADE_TIMEOUT_MS = 4000   # supervision timeout the firmware asks the central for
+LINK_UPGRADE_WAIT_S = 12
+LINK_UPGRADE_TIMEOUT_MS = 4000   # supervision timeout the firmware asks the central for
+LINK_UPGRADE_WAIT_S = 12
 
 # esp_app_desc_t sits right after the 24-byte image header and the first
 # 8-byte segment header; app_elf_sha256 is its last field.
@@ -465,6 +469,56 @@ class GrinderBLETool:
         except Exception:
             return None
 
+    async def wait_for_link_upgrade(self):
+        """Hold the transfer until the central has applied the firmware's requested link parameters.
+
+        Apple centrals start every connection with a 720ms supervision timeout and only
+        honor the device's request a few seconds in; a long transfer on the short timeout
+        drops on any sub-second stall. Firmware without link reporting returns at once."""
+        deadline = time.time() + LINK_UPGRADE_WAIT_S
+        while True:
+            try:
+                data = await self.client.read_gatt_char(BLE_SYSINFO_SYSTEM_CHAR_UUID)
+                system = json.loads(data.decode('utf-8'))
+            except Exception:
+                return
+            timeout_ms = system.get('conn_timeout_ms')
+            if timeout_ms is None:
+                return
+            if timeout_ms >= LINK_UPGRADE_TIMEOUT_MS:
+                self.safe_print(f"[INFO] Link ready: interval {system.get('conn_itvl_ms', 0):.0f}ms, "
+                                f"supervision timeout {timeout_ms}ms, MTU {system.get('conn_mtu', 0)}")
+                return
+            if time.time() >= deadline:
+                self.safe_print(f"[WARN] Central kept supervision timeout at {timeout_ms}ms; transferring anyway")
+                return
+            await asyncio.sleep(1)
+
+    async def wait_for_link_upgrade(self):
+        """Hold the transfer until the central has applied the firmware's requested link parameters.
+
+        Apple centrals start every connection with a 720ms supervision timeout and only
+        honor the device's request a few seconds in; a long transfer on the short timeout
+        drops on any sub-second stall. Firmware without link reporting returns at once."""
+        deadline = time.time() + LINK_UPGRADE_WAIT_S
+        while True:
+            try:
+                data = await self.client.read_gatt_char(BLE_SYSINFO_SYSTEM_CHAR_UUID)
+                system = json.loads(data.decode('utf-8'))
+            except Exception:
+                return
+            timeout_ms = system.get('conn_timeout_ms')
+            if timeout_ms is None:
+                return
+            if timeout_ms >= LINK_UPGRADE_TIMEOUT_MS:
+                self.safe_print(f"[INFO] Link ready: interval {system.get('conn_itvl_ms', 0):.0f}ms, "
+                                f"supervision timeout {timeout_ms}ms, MTU {system.get('conn_mtu', 0)}")
+                return
+            if time.time() >= deadline:
+                self.safe_print(f"[WARN] Central kept supervision timeout at {timeout_ms}ms; transferring anyway")
+                return
+            await asyncio.sleep(1)
+
     async def upload_firmware(self, firmware_path: str, force_full: bool = False) -> bool:
         firmware_file = Path(firmware_path)
         if not firmware_file.exists():
@@ -517,6 +571,10 @@ class GrinderBLETool:
         self.device_build = device_build
         self.firmware_size = original_size
         self.patch_size = len(patch_data)
+
+        await self.wait_for_link_upgrade()
+
+        await self.wait_for_link_upgrade()
         
         return await self.send_ota_update(patch_data, new_build)
 
@@ -1208,6 +1266,12 @@ class GrinderBLETool:
             self.safe_print(f"   Internal:     {heap_int_free//1024:,} KB free "
                             f"(min ever {heap_int_min//1024:,} KB, largest block {heap_int_largest//1024:,} KB)")
         self.safe_print(f"   Flash Size:   {flash_size//1024//1024:,} MB")
+
+        if system.get('conn_itvl_ms') is not None:
+            self.safe_print(f"[BLE LINK]:")
+            self.safe_print(f"   Interval:     {system.get('conn_itvl_ms', 0):.2f} ms (latency {system.get('conn_latency', 0)})")
+            self.safe_print(f"   Supervision:  {system.get('conn_timeout_ms', 0)} ms")
+            self.safe_print(f"   MTU:          {system.get('conn_mtu', 0)}")
         
         # Performance Information
         self.safe_print(f"[PERFORMANCE]:")

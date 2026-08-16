@@ -54,6 +54,20 @@
 #define BLE_SYSINFO_MAX_PAYLOAD_BYTES 512                                       // Maximum payload size for system info
 
 //------------------------------------------------------------------------------
+// BLE LINK PARAMETERS (requested from the central after connect)
+//------------------------------------------------------------------------------
+// Apple centrals default to a 720ms supervision timeout, which drops the link
+// on any sub-second stall during long OTA transfers. Ask for their documented
+// accepted range instead: interval 15-30ms, no latency, 4s timeout.
+#define BLE_CONN_INTERVAL_MIN 12                                               // 1.25ms units (15ms)
+#define BLE_CONN_INTERVAL_MAX 24                                               // 1.25ms units (30ms)
+#define BLE_CONN_LATENCY 0
+#define BLE_CONN_SUPERVISION_TIMEOUT 400                                       // 10ms units (4s)
+#define BLE_CONN_PARAM_REQUEST_DELAY_MS 1000                                   // Wait for the central to finish its own setup before asking
+#define BLE_CONN_PARAM_REQUEST_RETRY_MS 5000                                   // Re-ask while the live timeout is still below target
+#define BLE_CONN_PARAM_REQUEST_MAX_ATTEMPTS 3
+
+//------------------------------------------------------------------------------
 // BLE TIMEOUT SETTINGS
 //------------------------------------------------------------------------------
 #define BLE_AUTO_DISABLE_TIMEOUT_MS (30 * 60 * 1000)                          // Auto-disable BLE after inactivity
