@@ -74,12 +74,8 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
                                    : THEME_COLOR_SCREENSAVER_CATCH_MISS;
 }
 
-// Tiny dot left of a countdown flagging a rushed or missed catch
-void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
-    uint32_t color = arrival_catch_color(walk_min, mins);
-    if (color == kNoCatchWarning) {
-        return;
-    }
+// Tiny dot flagging a rushed or missed catch
+lv_obj_t* make_catch_dot(lv_obj_t* parent, uint32_t color) {
     lv_obj_t* dot = lv_obj_create(parent);
     lv_obj_set_size(dot, kCatchDotSizePx, kCatchDotSizePx);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
@@ -88,6 +84,7 @@ void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
     lv_obj_set_style_border_width(dot, 0, 0);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+    return dot;
 }
 
 lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap) {
@@ -144,26 +141,32 @@ void make_route_badge(lv_obj_t* parent, const TrainArrivalItem& item) {
     lv_obj_align(badge_label, LV_ALIGN_CENTER, 0, kBadgeGlyphNudgePx);
 }
 
-// Minutes stacked over a tiny "min" in a column at least two digits wide so
-// short countdowns take the same room as long ones; the catch dot rides right
-// next to the digits, centered on them. Kept shallow on purpose: the UI task
-// stack is small and LVGL's draw recursion grows with nesting depth
+// Minutes stacked over a tiny "min", both centered in a column at least two
+// digits wide so short countdowns take the same room as long ones. The catch
+// dot floats in extra left padding right beside the digits, centered on them,
+// so it never shifts the stack; that slot is always reserved when
+// reserve_dot_slot is set (keeps the board's numbers aligned) and only added
+// when a dot is shown otherwise (keeps the tiles symmetric)
 lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
-                         const lv_font_t* font, int32_t pad_hor) {
-    lv_point_t two_digits;
-    lv_text_get_size(&two_digits, "00", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    lv_obj_t* column = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 0);
-    lv_obj_set_width(column, LV_SIZE_CONTENT);
-    lv_obj_set_style_min_width(column, two_digits.x + 2 * pad_hor, 0);
-    lv_obj_set_style_pad_hor(column, pad_hor, 0);
-
-    lv_obj_t* digits_row = make_flex_container(column, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
-    lv_obj_set_width(digits_row, LV_SIZE_CONTENT);
-    make_catch_dot(digits_row, item.walk_min, mins);
-
+                         const lv_font_t* font, int32_t pad_hor, bool reserve_dot_slot) {
     char mins_text[4];
     snprintf(mins_text, sizeof(mins_text), "%u", mins);
-    lv_obj_t* mins_label = lv_label_create(digits_row);
+    lv_point_t two_digits;
+    lv_point_t digits;
+    lv_text_get_size(&two_digits, "00", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    lv_text_get_size(&digits, mins_text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    int32_t content_width = std::max(two_digits.x, digits.x);
+
+    uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
+    bool has_dot = dot_color != kNoCatchWarning;
+    int32_t dot_slot = (has_dot || reserve_dot_slot) ? kCatchDotSizePx + kCatchDotGapPx : 0;
+
+    lv_obj_t* column = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 0);
+    lv_obj_set_width(column, content_width + 2 * pad_hor + dot_slot);
+    lv_obj_set_style_pad_left(column, pad_hor + dot_slot, 0);
+    lv_obj_set_style_pad_right(column, pad_hor, 0);
+
+    lv_obj_t* mins_label = lv_label_create(column);
     lv_label_set_text(mins_label, mins_text);
     lv_obj_set_style_text_font(mins_label, font, 0);
     lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
@@ -173,6 +176,14 @@ lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t
     lv_obj_set_style_text_font(unit_label, kCountdownUnitFont, 0);
     lv_obj_set_style_text_color(unit_label, lv_color_hex(THEME_COLOR_TEXT_SECONDARY), 0);
     lv_obj_set_style_translate_y(unit_label, -kCountdownUnitLiftPx, 0);
+
+    if (has_dot) {
+        lv_obj_t* dot = make_catch_dot(column, dot_color);
+        lv_obj_add_flag(dot, LV_OBJ_FLAG_FLOATING);
+        lv_obj_align(dot, LV_ALIGN_TOP_LEFT,
+                     (content_width - digits.x) / 2 - kCatchDotGapPx - kCatchDotSizePx,
+                     (lv_font_get_line_height(font) - kCatchDotSizePx) / 2);
+    }
     return column;
 }
 
@@ -639,10 +650,10 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 6);
+        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 8);
         for (int m = 0; m < entry.count; m++) {
             lv_obj_t* tile = make_countdown(tiles_row, item, entry.mins[m], &lv_font_montserrat_24,
-                                            kCountdownTilePadPx);
+                                            kCountdownTilePadPx, false);
             lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
             lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
             lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
@@ -686,7 +697,7 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        make_countdown(row, item, entries[i].min, &lv_font_montserrat_32, 0);
+        make_countdown(row, item, entries[i].min, &lv_font_montserrat_32, 0, true);
     }
     return last - first;
 }
