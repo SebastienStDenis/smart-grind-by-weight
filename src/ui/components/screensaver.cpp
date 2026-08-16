@@ -28,6 +28,12 @@ constexpr int kMaxGroupedRows = 4;
 constexpr int kMaxBoardRows = 7;
 constexpr int kCatchDotSizePx = 6;
 
+// Countdowns follow the MTA platform clocks: big minutes with a tiny "min"
+// underneath, pulled up so it hugs the digits
+constexpr int kCountdownUnitLiftPx = 3;
+constexpr int kCountdownTileRadiusPx = 10;
+const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
+
 // Page indicator dots stacked along the right edge of a multi-page trains
 // view; the rows shrink by the gutter width so nothing sits under the dots
 constexpr int kPageDotSizePx = 6;
@@ -66,11 +72,12 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
                                    : THEME_COLOR_SCREENSAVER_CATCH_MISS;
 }
 
-// Tiny dot left of a countdown flagging a rushed or missed catch
-void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
+// Tiny dot left of a countdown flagging a rushed or missed catch; nullptr
+// when the train is comfortably reachable or the watch has no walk estimate
+lv_obj_t* make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
     uint32_t color = arrival_catch_color(walk_min, mins);
     if (color == kNoCatchWarning) {
-        return;
+        return nullptr;
     }
     lv_obj_t* dot = lv_obj_create(parent);
     lv_obj_set_size(dot, kCatchDotSizePx, kCatchDotSizePx);
@@ -80,6 +87,7 @@ void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
     lv_obj_set_style_border_width(dot, 0, 0);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+    return dot;
 }
 
 lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap) {
@@ -134,6 +142,35 @@ void make_route_badge(lv_obj_t* parent, const TrainArrivalItem& item) {
     lv_obj_set_style_text_font(badge_label, &lv_font_bullet_40, 0);
     lv_obj_set_style_text_color(badge_label, lv_color_hex(item.text_color), 0);
     lv_obj_align(badge_label, LV_ALIGN_CENTER, 0, kBadgeGlyphNudgePx);
+}
+
+// Minutes stacked over a tiny "min", in a column as wide as two digits so the
+// numbers line up whatever their length; the catch dot sits left of the
+// column, centered on the digits rather than the whole stack
+void make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
+                    const lv_font_t* font) {
+    lv_obj_t* dot = make_catch_dot(parent, item.walk_min, mins);
+    if (dot) {
+        lv_obj_set_style_translate_y(dot, -lv_font_get_line_height(kCountdownUnitFont) / 2, 0);
+    }
+
+    lv_point_t two_digits;
+    lv_text_get_size(&two_digits, "00", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    lv_obj_t* column = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 0);
+    lv_obj_set_width(column, two_digits.x);
+
+    char mins_text[4];
+    snprintf(mins_text, sizeof(mins_text), "%u", mins);
+    lv_obj_t* mins_label = lv_label_create(column);
+    lv_label_set_text(mins_label, mins_text);
+    lv_obj_set_style_text_font(mins_label, font, 0);
+    lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
+
+    lv_obj_t* unit_label = lv_label_create(column);
+    lv_label_set_text(unit_label, "min");
+    lv_obj_set_style_text_font(unit_label, kCountdownUnitFont, 0);
+    lv_obj_set_style_text_color(unit_label, lv_color_hex(THEME_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_set_style_translate_y(unit_label, -kCountdownUnitLiftPx, 0);
 }
 
 // Direction + optional station, stacked; grows to fill the space between the
@@ -539,7 +576,7 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_container_ = nullptr;
     }
 
-    grouped_container_ = make_trains_page(grouped_tile_, 16);
+    grouped_container_ = make_trains_page(grouped_tile_, 12);
     board_container_ = make_trains_page(board_tile_, 8);
 
     bool stale = arrivals.gateway_stale || device_stale;
@@ -549,7 +586,7 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_page_ = 0;
         board_page_count_ = 1;
     }
-    int grouped_rows = have_data ? build_grouped_rows(grouped_container_, arrivals, elapsed_min) : 0;
+    int grouped_rows = have_data ? build_grouped_rows(grouped_container_, arrivals, elapsed_min, stale) : 0;
     int board_rows = have_data ? build_board_rows(board_container_, arrivals, elapsed_min, stale) : 0;
 
     add_trains_status(grouped_container_, have_data, grouped_rows, stale);
@@ -559,12 +596,12 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 }
 
 // One entry per watch, in gateway order: bullet + destination/station, then a
-// full-width pill row with every arrival. Trains arriving right now show as
-// 0m; only trains the local countdown has pushed past due are dropped, and
-// watches left empty are hidden. Watches beyond one screenful are split
-// across pages the user swipes between.
+// full-width row of countdown tiles with every arrival. Trains arriving right
+// now show as 0 min; only trains the local countdown has pushed past due are
+// dropped, and watches left empty are hidden. Watches beyond one screenful
+// are split across pages the user swipes between.
 int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals& arrivals,
-                                           uint32_t elapsed_min) {
+                                           uint32_t elapsed_min, bool stale) {
     WatchEntry entries[NET_MAX_ARRIVAL_ITEMS];
     int entry_count = 0;
     for (int i = 0; i < arrivals.item_count; i++) {
@@ -582,39 +619,33 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
     }
 
     // Pages fill to capacity in order (five watches show as 4+1) so a watch
-    // stays on the same page as the count changes
-    resolve_trains_page(entry_count, kMaxGroupedRows, grouped_page_, grouped_page_count_);
-    int first = grouped_page_ * kMaxGroupedRows;
-    int last = std::min(entry_count, first + kMaxGroupedRows);
+    // stays on the same page as the count changes; the stale marker takes
+    // the last slot on every page
+    int rows_per_page = stale ? kMaxGroupedRows - 1 : kMaxGroupedRows;
+    resolve_trains_page(entry_count, rows_per_page, grouped_page_, grouped_page_count_);
+    int first = grouped_page_ * rows_per_page;
+    int last = std::min(entry_count, first + rows_per_page);
 
     for (int i = first; i < last; i++) {
         const WatchEntry& entry = entries[i];
         const TrainArrivalItem& item = *entry.item;
 
-        lv_obj_t* entry_box = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 4);
+        lv_obj_t* entry_box = make_flex_container(parent, LV_FLEX_FLOW_COLUMN, 2);
 
         lv_obj_t* row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 12);
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        lv_obj_t* pills_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 6);
+        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 6);
         for (int m = 0; m < entry.count; m++) {
-            char pill_text[8];
-            snprintf(pill_text, sizeof(pill_text), "%um", entry.mins[m]);
-
-            lv_obj_t* pill = make_flex_container(pills_row, LV_FLEX_FLOW_ROW, 4);
-            lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
-            lv_obj_set_style_bg_color(pill, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
-            lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
-            lv_obj_set_style_pad_hor(pill, 8, 0);
-            lv_obj_set_style_pad_ver(pill, 0, 0);
-
-            make_catch_dot(pill, item.walk_min, entry.mins[m]);
-            lv_obj_t* pill_label = lv_label_create(pill);
-            lv_label_set_text(pill_label, pill_text);
-            lv_obj_set_style_text_font(pill_label, &lv_font_montserrat_24, 0);
-            lv_obj_set_style_text_color(pill_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
+            lv_obj_t* tile = make_flex_container(tiles_row, LV_FLEX_FLOW_ROW, 4);
+            lv_obj_set_size(tile, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
+            lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
+            lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+            lv_obj_set_style_pad_hor(tile, 8, 0);
+            lv_obj_set_style_pad_ver(tile, 0, 0);
+            make_countdown(tile, item, entry.mins[m], &lv_font_montserrat_24);
         }
     }
 
@@ -622,7 +653,7 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
 }
 
 // Flat departure board: one row per upcoming train sorted by arrival time,
-// with a big countdown on the right. Trains arriving right now show as 0m;
+// with a big countdown on the right. Trains arriving right now show as 0 min;
 // only trains the local countdown has pushed past due are dropped. Trains
 // beyond one screenful are split across pages the user swipes between.
 int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& arrivals,
@@ -655,15 +686,9 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        char mins_text[16];
-        snprintf(mins_text, sizeof(mins_text), "%um", entries[i].min);
         lv_obj_t* countdown = make_flex_container(row, LV_FLEX_FLOW_ROW, 6);
         lv_obj_set_width(countdown, LV_SIZE_CONTENT);
-        make_catch_dot(countdown, item.walk_min, entries[i].min);
-        lv_obj_t* mins_label = lv_label_create(countdown);
-        lv_label_set_text(mins_label, mins_text);
-        lv_obj_set_style_text_font(mins_label, &lv_font_montserrat_32, 0);
-        lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
+        make_countdown(countdown, item, entries[i].min, &lv_font_montserrat_32);
     }
     return last - first;
 }
