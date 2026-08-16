@@ -6,8 +6,10 @@
 // Full-screen idle overlay: a horizontal tileview of three pages - an animated
 // dot-matrix ripple (Wave), subway arrivals from the train gateway grouped per
 // tracked watch (Trains grouped), and a flat time-sorted arrivals board
-// (Trains board). Swiping left/right jumps to the neighboring page with no
-// transition (the shown page is persisted); a tap dismisses the overlay.
+// (Trains board), both showing countdowns as big bare minutes with a single
+// tiny "mins" caption like the MTA platform clocks. Swiping left/right jumps
+// to the neighboring page with no transition (the shown page is persisted); a
+// tap dismisses the overlay.
 // All touches are swallowed before they reach the widgets underneath.
 // Both trains views split rows that don't fit one screen across fixed pages:
 // swiping up/down renders the next/previous page outright (no scrolling
@@ -54,7 +56,7 @@ private:
     void rebuild_trains_views(const TrainArrivals& arrivals, bool have_data,
                               uint32_t elapsed_min, bool device_stale);
     int build_grouped_rows(lv_obj_t* parent, const TrainArrivals& arrivals,
-                           uint32_t elapsed_min);
+                           uint32_t elapsed_min, bool stale);
     int build_board_rows(lv_obj_t* parent, const TrainArrivals& arrivals,
                          uint32_t elapsed_min, bool stale);
 
