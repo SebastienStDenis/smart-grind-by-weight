@@ -123,11 +123,18 @@ private:
     bool ota_complete_pending;
     bool ota_finalizing;
 
+    // Active link: parameters are requested from handle() and reported in system info
+    uint16_t conn_handle;
+    unsigned long connect_time;
+    unsigned long last_link_param_request;
+    uint8_t link_param_attempts;
+
     // Private methods
     void update_ui_status(const char* status);
     void enqueue_ui_status(const char* status);
     void set_ota_status(BLEOTAStatus status, const char* message = nullptr);
     void finish_ota();
+    void request_link_params();
     void set_data_status(BLEDataStatus status);
     void handle_ota_control_command(BLECharacteristic* characteristic);
     void handle_ota_data_chunk(BLECharacteristic* characteristic);
@@ -246,6 +253,7 @@ public:
     
     // BLE Callbacks
     void onConnect(BLEServer* server) override;
+    void onConnect(BLEServer* server, ble_gap_conn_desc* desc) override;
     void onDisconnect(BLEServer* server) override;
     void onWrite(BLECharacteristic* characteristic) override;
     void onRead(BLECharacteristic* characteristic) override;

@@ -1,5 +1,7 @@
 #include "manager.h"
 #include <algorithm>
+#include <host/ble_gap.h>
+#include <host/ble_att.h>
 #include <cstdarg>
 #include <Arduino.h>
 #include <esp_system.h>
@@ -58,7 +60,11 @@ BluetoothManager::BluetoothManager()
     , diagnostic_report_pending(false)
     , diagnostic_report_in_progress(false)
     , ota_complete_pending(false)
-    , ota_finalizing(false) {
+    , ota_finalizing(false)
+    , conn_handle(BLE_HS_CONN_HANDLE_NONE)
+    , connect_time(0)
+    , last_link_param_request(0)
+    , link_param_attempts(0) {
 }
 
 BluetoothManager::~BluetoothManager() {
@@ -225,6 +231,7 @@ void BluetoothManager::enable(unsigned long timeout_ms) {
         BLE_SYSINFO_SYSTEM_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
+    sysinfo_system_characteristic->setCallbacks(this);
     delay(BLE_INIT_CHARACTERISTIC_DELAY_MS);
     
     sysinfo_performance_characteristic = sysinfo_service->createCharacteristic(
@@ -369,6 +376,8 @@ void BluetoothManager::handle() {
         timeout_ms = BLE_AUTO_DISABLE_TIMEOUT_MS;
     }
     
+    request_link_params();
+
     if (ota_complete_pending) {
         ota_complete_pending = false;
         finish_ota();
@@ -921,8 +930,44 @@ void BluetoothManager::onConnect(BLEServer* server) {
     mark_sessions_info_dirty();
 }
 
+void BluetoothManager::onConnect(BLEServer* server, ble_gap_conn_desc* desc) {
+    conn_handle = desc ? desc->conn_handle : BLE_HS_CONN_HANDLE_NONE;
+    connect_time = millis();
+    last_link_param_request = 0;
+    link_param_attempts = 0;
+    if (desc) {
+        log("BLE: Link params itvl=%.2fms latency=%u timeout=%ums\n",
+            desc->conn_itvl * 1.25f, desc->conn_latency, desc->supervision_timeout * 10);
+    }
+}
+
+void BluetoothManager::request_link_params() {
+    if (!device_connected || !ble_server || conn_handle == BLE_HS_CONN_HANDLE_NONE) return;
+    if (link_param_attempts >= BLE_CONN_PARAM_REQUEST_MAX_ATTEMPTS) return;
+
+    unsigned long now = millis();
+    if (now - connect_time < BLE_CONN_PARAM_REQUEST_DELAY_MS) return;
+    if (last_link_param_request != 0 && now - last_link_param_request < BLE_CONN_PARAM_REQUEST_RETRY_MS) return;
+
+    ble_gap_conn_desc link;
+    if (ble_gap_conn_find(conn_handle, &link) != 0) return;
+    if (link.supervision_timeout >= BLE_CONN_SUPERVISION_TIMEOUT) {
+        link_param_attempts = BLE_CONN_PARAM_REQUEST_MAX_ATTEMPTS;
+        return;
+    }
+
+    last_link_param_request = now;
+    link_param_attempts++;
+    log("BLE: Requesting link params itvl=%u-%u latency=%u timeout=%ums (attempt %u)\n",
+        BLE_CONN_INTERVAL_MIN, BLE_CONN_INTERVAL_MAX, BLE_CONN_LATENCY,
+        BLE_CONN_SUPERVISION_TIMEOUT * 10, link_param_attempts);
+    ble_server->updateConnParams(conn_handle, BLE_CONN_INTERVAL_MIN, BLE_CONN_INTERVAL_MAX,
+                                 BLE_CONN_LATENCY, BLE_CONN_SUPERVISION_TIMEOUT);
+}
+
 void BluetoothManager::onDisconnect(BLEServer* server) {
     device_connected = false;
+    conn_handle = BLE_HS_CONN_HANDLE_NONE;
     last_disconnect_time = millis(); // Reset timeout countdown from now
     
     log("BLE: Client disconnected - timeout countdown resumed\n");
@@ -963,7 +1008,9 @@ void BluetoothManager::onWrite(BLECharacteristic* characteristic) {
 }
 
 void BluetoothManager::onRead(BLECharacteristic* characteristic) {
-    // Reserved for future use
+    if (characteristic == sysinfo_system_characteristic) {
+        update_system_info();
+    }
 }
 
 String BluetoothManager::check_ota_failure_after_boot() {
@@ -995,6 +1042,9 @@ void BluetoothManager::update_system_info() {
     uint32_t flash_size = ESP.getFlashChipSize();
     float heap_usage_percent = (float(heap_used) / float(heap_total)) * 100.0f;
 
+    ble_gap_conn_desc link = {};
+    bool have_link = conn_handle != BLE_HS_CONN_HANDLE_NONE && ble_gap_conn_find(conn_handle, &link) == 0;
+
     const char* reset_reason = "UNKNOWN";
     switch (esp_reset_reason()) {
         case ESP_RST_POWERON: reset_reason = "POWERON"; break;
@@ -1025,7 +1075,11 @@ void BluetoothManager::update_system_info() {
         "\"heap_int_largest\":%u,"
         "\"reset_reason\":\"%s\","
         "\"flash_size\":%u,"
-        "\"cpu_freq\":%u"
+        "\"cpu_freq\":%u,"
+        "\"conn_itvl_ms\":%.2f,"
+        "\"conn_latency\":%u,"
+        "\"conn_timeout_ms\":%u,"
+        "\"conn_mtu\":%u"
         "}",
         BUILD_FIRMWARE_VERSION,
         BUILD_NUMBER,
@@ -1040,7 +1094,11 @@ void BluetoothManager::update_system_info() {
         (unsigned int)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
         reset_reason,
         (unsigned int)flash_size,
-        (unsigned int)ESP.getCpuFreqMHz()
+        (unsigned int)ESP.getCpuFreqMHz(),
+        have_link ? link.conn_itvl * 1.25f : 0.0f,
+        have_link ? (unsigned int)link.conn_latency : 0u,
+        have_link ? (unsigned int)link.supervision_timeout * 10 : 0u,
+        have_link ? (unsigned int)ble_att_mtu(conn_handle) : 0u
     );
     
     sysinfo_system_characteristic->setValue(buffer);
