@@ -35,7 +35,7 @@ constexpr int kMaxBoardRows = 7;
 // scrolling since the screensaver only takes taps
 constexpr uint32_t kGroupedPageHoldMs = 5000;
 constexpr uint32_t kGroupedPageFadeMs = 200;
-constexpr int kCatchRingWidthPx = 2;
+constexpr int kCatchDotSizePx = 6;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
 // the font's 8px descent as empty space below them; shift down by half of it
@@ -69,18 +69,20 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
                                    : THEME_COLOR_SCREENSAVER_CATCH_MISS;
 }
 
-// Rings a pill in the warning color for a rushed or missed catch. Every pill
-// reserves the ring width (transparent when not flagged) so flagged pills stay
-// the same size as the rest of the row
-void apply_catch_ring(lv_obj_t* pill, uint8_t walk_min, uint8_t mins) {
-    lv_obj_set_style_border_width(pill, kCatchRingWidthPx, 0);
+// Tiny dot left of a countdown flagging a rushed or missed catch
+void make_catch_dot(lv_obj_t* parent, uint8_t walk_min, uint8_t mins) {
     uint32_t color = arrival_catch_color(walk_min, mins);
     if (color == kNoCatchWarning) {
-        lv_obj_set_style_border_opa(pill, LV_OPA_TRANSP, 0);
         return;
     }
-    lv_obj_set_style_border_color(pill, lv_color_hex(color), 0);
-    lv_obj_set_style_border_opa(pill, LV_OPA_COVER, 0);
+    lv_obj_t* dot = lv_obj_create(parent);
+    lv_obj_set_size(dot, kCatchDotSizePx, kCatchDotSizePx);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
 }
 
 lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap) {
@@ -535,17 +537,15 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
             char pill_text[8];
             snprintf(pill_text, sizeof(pill_text), "%um", entry.mins[m]);
 
-            lv_obj_t* pill = lv_obj_create(pills_row);
+            lv_obj_t* pill = make_flex_container(pills_row, LV_FLEX_FLOW_ROW, 4);
             lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
             lv_obj_set_style_bg_color(pill, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
             lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
             lv_obj_set_style_pad_hor(pill, 8, 0);
             lv_obj_set_style_pad_ver(pill, 0, 0);
-            lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
-            lv_obj_clear_flag(pill, LV_OBJ_FLAG_CLICKABLE);
-            apply_catch_ring(pill, item.walk_min, entry.mins[m]);
 
+            make_catch_dot(pill, item.walk_min, entry.mins[m]);
             lv_obj_t* pill_label = lv_label_create(pill);
             lv_label_set_text(pill_label, pill_text);
             lv_obj_set_style_text_font(pill_label, &lv_font_montserrat_24, 0);
@@ -587,17 +587,15 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        // No pill to ring on the board, so the countdown itself takes the color
         char mins_text[16];
         snprintf(mins_text, sizeof(mins_text), "%um", entries[i].min);
-        uint32_t catch_color = arrival_catch_color(item.walk_min, entries[i].min);
-        lv_obj_t* mins_label = lv_label_create(row);
+        lv_obj_t* countdown = make_flex_container(row, LV_FLEX_FLOW_ROW, 6);
+        lv_obj_set_width(countdown, LV_SIZE_CONTENT);
+        make_catch_dot(countdown, item.walk_min, entries[i].min);
+        lv_obj_t* mins_label = lv_label_create(countdown);
         lv_label_set_text(mins_label, mins_text);
         lv_obj_set_style_text_font(mins_label, &lv_font_montserrat_32, 0);
-        lv_obj_set_style_text_color(
-            mins_label,
-            lv_color_hex(catch_color == kNoCatchWarning ? THEME_COLOR_TEXT_PRIMARY : catch_color),
-            0);
+        lv_obj_set_style_text_color(mins_label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
     }
     return rows;
 }
