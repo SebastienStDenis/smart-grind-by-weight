@@ -6,10 +6,10 @@
 // Full-screen idle overlay: a horizontal tileview of three pages - an animated
 // dot-matrix ripple (Wave), subway arrivals from the train gateway grouped per
 // tracked watch (Trains grouped), and a flat time-sorted arrivals board
-// (Trains board), both showing countdowns as big minutes over a tiny "min"
-// like the MTA platform clocks. Swiping left/right jumps to the neighboring
-// page with no transition (the shown page is persisted); a tap dismisses the
-// overlay.
+// (Trains board), both showing countdowns as big bare minutes with a single
+// tiny "mins" caption like the MTA platform clocks. Swiping left/right jumps
+// to the neighboring page with no transition (the shown page is persisted); a
+// tap dismisses the overlay.
 // All touches are swallowed before they reach the widgets underneath.
 // Both trains views split rows that don't fit one screen across fixed pages:
 // swiping up/down renders the next/previous page outright (no scrolling
