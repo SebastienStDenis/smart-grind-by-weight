@@ -53,7 +53,7 @@ const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 // held off the edge itself by kPageBarEdgePx and with the rows indented past
 // them by kPageBarClearPx
 constexpr int kPageBarEdgePx = 4;
-constexpr int kPageBarWidthPx = 2;
+constexpr int kPageBarWidthPx = 3;
 constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
