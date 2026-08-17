@@ -59,6 +59,15 @@ uv venv --python 3.12 .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --port 8600 --reload
 ```
 
+The watch list is reordered with [SortableJS](https://sortablejs.github.io/Sortable/),
+vendored as `static/vendor/sortable.min.js` (MIT) so the page needs no CDN on a
+local network. Refresh it by downloading the build for a newer version:
+
+```bash
+curl -fsSL -o static/vendor/sortable.min.js \
+  https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js
+```
+
 Station directory (`app/data/stations.json`) is a committed snapshot of the
 [MTA Subway Stations dataset](https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f);
 regenerate it with `python3 scripts/refresh_stations.py`.

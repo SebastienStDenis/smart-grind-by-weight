@@ -138,20 +138,19 @@
   li.watch .grip { cursor: grab; touch-action: none; }
   li.watch .grip svg { fill: currentColor; }
 
-  /* Only while a drag is running do the displaced rows animate into their new
-     slots. The dragged row must stay untransitioned or it lags the pointer, and
-     it needs a more specific selector than the rule above to stay that way. */
+  /* Sortable drags a clone of the row under the pointer and leaves the original
+     in the list as the drop placeholder, so the two get opposite treatments:
+     the clone is a lifted card, the placeholder fades back into the page. */
   body.dragging { user-select: none; cursor: grabbing; }
-  body.dragging li.watch { transition: transform 160ms ease; }
   body.dragging li.watch .grip { cursor: grabbing; }
-  body.dragging li.watch.drag-active { transition: none; }
-  li.watch.drag-active {
-    position: relative; z-index: 2;
+  /* The hairline keeps the card's edge readable on the dark ground, where a
+     black drop shadow shows nothing */
+  li.watch.lifted {
     background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
-    box-shadow: 0 8px 24px var(--shadow);
+    box-shadow: 0 0 0 1px var(--border), 0 8px 24px var(--shadow);
+    cursor: grabbing;
   }
-  /* Carries the row from where it was dropped down into its new slot */
-  li.watch.settling { transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+  li.watch.drop-slot { opacity: 0.25; }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -253,6 +252,7 @@
 <p id="status"></p>
 </main>
 
+<script src="/static/vendor/sortable.min.js"></script>
 <script>
 const COLORS = {
   "1":["#EE352E","#fff"],"2":["#EE352E","#fff"],"3":["#EE352E","#fff"],
@@ -336,13 +336,15 @@ function actionsEl(index, count) {
     disabled: count < 2,
   });
   grip.innerHTML = GRIP_SVG;
-  grip.onpointerdown = startDrag;
-  grip.onkeydown = e => {
+  grip.onkeydown = async e => {
     const from = rowIndex(e.currentTarget);
     const to = e.key === "ArrowUp" ? from - 1 : e.key === "ArrowDown" ? from + 1 : null;
     if (to === null || to < 0 || to >= $("watches").children.length) return;
     e.preventDefault();
-    moveWatch(from, to);
+    const landed = await moveWatch(from, to) ? to : from;
+    await refreshWatches();
+    // The refresh rebuilds the row, so hand focus back for a repeated press
+    $("watches").children[landed]?.querySelector(".grip")?.focus();
   };
   box.append(grip);
 
@@ -355,149 +357,50 @@ function actionsEl(index, count) {
   return box;
 }
 
-// applied === true when the row has already been moved in the DOM, so a
-// successful save needs no repaint; a rejection still resyncs from the server
-async function moveWatch(index, to, applied = false) {
+// Saves a reorder. Returns whether it stuck, so the caller decides what to
+// repaint: the drag has already moved the row, the arrow keys have not.
+async function moveWatch(index, to) {
   try {
     await api(`/api/watches/${index}/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to }),
     });
-    if (!applied) refreshWatches();
+    return true;
   } catch (err) {
     setStatus(err.message, "error");
-    refreshWatches();
+    return false;
   }
 }
 
-// Drag to reorder. Pointer events cover mouse, touch and pen alike; positions
-// are tracked in page coordinates so edge auto-scrolling stays consistent.
-let drag = null;
+// Drag to reorder, via Sortable (vendored). It binds to the <ul>, not to the
+// rows, so it keeps working across the rebuilds that refreshWatches does.
+let dragging = false;
 
-function startDrag(e) {
-  if (e.button > 0) return;
-  const rows = [...$("watches").children];
-  const index = rowIndex(e.currentTarget);
-  if (rows.length < 2 || index < 0) return;
-  e.preventDefault();
-
-  const scroll = window.scrollY;
-  drag = {
-    index,
-    target: index,
-    rows,
-    // Page-space midpoint of every row and the dragged row's height, frozen
-    // at drag start
-    mids: rows.map(r => {
-      const box = r.getBoundingClientRect();
-      return box.top + scroll + box.height / 2;
-    }),
-    height: rows[index].getBoundingClientRect().height,
-    startPageY: e.clientY + scroll,
-    clientY: e.clientY,
-    scrollTimer: null,
-  };
-
-  e.currentTarget.setPointerCapture(e.pointerId);
-  document.body.classList.add("dragging");
-  rows[index].classList.add("drag-active");
-  addEventListener("pointermove", onDragMove);
-  addEventListener("pointerup", endDrag);
-  addEventListener("pointercancel", endDrag);
-  updateDrag();
-}
-
-function onDragMove(e) {
-  drag.clientY = e.clientY;
-  updateDrag();
-  autoScroll();
-}
-
-function updateDrag() {
-  const { index, rows, mids, height } = drag;
-  const centre = mids[index] + (drag.clientY + window.scrollY - drag.startPageY);
-
-  let target = index;
-  for (let i = 0; i < index; i++) {
-    if (centre < mids[i]) { target = i; break; }
-  }
-  if (target === index) {
-    for (let i = rows.length - 1; i > index; i--) {
-      if (centre > mids[i]) { target = i; break; }
-    }
-  }
-  drag.target = target;
-
-  rows.forEach((row, i) => {
-    if (i === index) {
-      row.style.transform = `translateY(${centre - mids[i]}px)`;
-      return;
-    }
-    // Rows between the old and new slot close up or open by exactly the gap the
-    // dragged row leaves behind, whatever their own heights are
-    const shift = (i > index && i <= target) ? -height : (i < index && i >= target) ? height : 0;
-    row.style.transform = shift ? `translateY(${shift}px)` : "";
-  });
-}
-
-// Keep scrolling while the pointer rests near the top or bottom of the screen,
-// so a watch can be dragged past the edge of a phone screen
-function autoScroll() {
-  const edge = 72;
-  const speed = drag.clientY < edge ? -12
-    : drag.clientY > innerHeight - edge ? 12
-    : 0;
-  if (!speed) {
-    clearInterval(drag.scrollTimer);
-    drag.scrollTimer = null;
-    return;
-  }
-  if (drag.scrollTimer) return;
-  drag.scrollTimer = setInterval(() => {
-    scrollBy(0, speed);
-    updateDrag();
-  }, 16);
-}
-
-// The row is moved in the DOM straight away, so the list never flashes back to
-// the old order while the save is in flight, then it slides from where it was
-// dropped into the slot the drag was previewing
-function endDrag() {
-  const { rows, index, target, scrollTimer } = drag;
-  clearInterval(scrollTimer);
-  removeEventListener("pointermove", onDragMove);
-  removeEventListener("pointerup", endDrag);
-  removeEventListener("pointercancel", endDrag);
-  drag = null;
-
-  const moved = rows[index];
-  const droppedAt = moved.getBoundingClientRect().top;
-
-  document.body.classList.remove("dragging");
-  rows.forEach(row => { row.style.transform = ""; });
-  if (target !== index) {
-    $("watches").insertBefore(moved, target > index ? rows[target].nextSibling : rows[target]);
-  }
-
-  // A sub-pixel settle can finish without ever firing transitionend, so the
-  // timer guarantees the lifted styling comes off either way
-  const settle = droppedAt - moved.getBoundingClientRect().top;
-  const rest = () => moved.classList.remove("settling", "drag-active");
-  if (settle) {
-    moved.style.transform = `translateY(${settle}px)`;
-    moved.addEventListener("transitionend", rest, { once: true });
-    setTimeout(rest, 400);
-    requestAnimationFrame(() => {
-      moved.classList.add("settling");
-      moved.style.transform = "";
-    });
-  } else {
-    rest();
-  }
-
-  if (target !== index) moveWatch(index, target, true);
-}
+Sortable.create($("watches"), {
+  draggable: "li.watch",
+  handle: ".grip",
+  animation: 160,
+  // The fallback path drags a clone we style ourselves, so a mouse and a finger
+  // get the same lifted row instead of the browser's native drag image
+  forceFallback: true,
+  fallbackOnBody: true,
+  fallbackTolerance: 3,
+  ghostClass: "drop-slot",
+  dragClass: "lifted",
+  onStart() {
+    dragging = true;
+    document.body.classList.add("dragging");
+  },
+  // The row is already in its new slot, so the list never flashes back to the
+  // old order while the save is in flight; a rejection resyncs from the server
+  async onEnd({ oldIndex, newIndex }) {
+    document.body.classList.remove("dragging");
+    const saved = newIndex === oldIndex || await moveWatch(oldIndex, newIndex);
+    dragging = false;
+    if (!saved) refreshWatches();
+  },
+});
 
 function walkControl(index, walkMin) {
   const input = el("input", {
@@ -527,7 +430,7 @@ function walkControl(index, walkMin) {
 
 async function refreshWatches() {
   // Don't rebuild the list under the user's cursor mid-drag or mid-edit
-  if (drag || document.activeElement?.closest?.(".walk")) return;
+  if (dragging || document.activeElement?.closest?.(".walk")) return;
   let watches, arrivals;
   try {
     [watches, arrivals] = await Promise.all([api("/api/watches"), api("/api/arrivals")]);
