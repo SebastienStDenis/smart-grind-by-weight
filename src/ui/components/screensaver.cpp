@@ -30,28 +30,36 @@ constexpr int kCatchDotSizePx = 6;
 
 // Countdowns follow the MTA platform clocks: big bare minutes, in rounded
 // tiles on the grouped view, with a single tiny "mins" as a column header
-// (board) or row label (grouped). The header's line box carries more air
-// below its glyphs than the rows need, so it is pulled back up by
-// kBoardHeaderTuckPx
+// (board) or row label (grouped)
 constexpr int kCountdownTileRadiusPx = 10;
 constexpr int kCountdownTilePadPx = 8;
 constexpr int kCatchDotGapPx = 5;
-constexpr int kBoardHeaderTuckPx = 8;
 
-// Grouped entries (52px badge row + tiles gap + 30px tile row) are spaced so four
-// of them span the page's 424px content height; fewer still stack from the top
-constexpr int kGroupedTilesGapPx = 8;
-constexpr int kGroupedRowGapPx = 21;
-constexpr int kBoardRowGapPx = 12;
+// Grouped entries (52px badge row + tiles gap + 40px tile row) are spaced so four
+// of them span the page's 424px content height; the tiles take the space the
+// gaps give up so the countdowns read from across the room, and the tighter
+// gap inside an entry keeps it grouped against the wider gap between watches
+constexpr int kGroupedTilesGapPx = 4;
+constexpr int kGroupedRowGapPx = 13;
+constexpr int kGroupedTileGapPx = 8;
+constexpr int kGroupedUnitMarginPx = 4;
+constexpr int kBoardHeaderTopPx = 26;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
-const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_28;
+const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 
-// Page indicator dots stacked along the right edge of a multi-page trains
-// view; the rows shrink by the gutter width so nothing sits under the dots
-constexpr int kPageDotSizePx = 6;
-constexpr int kPageDotGapPx = 8;
-constexpr int kPageDotGutterPx = 14;
+// Page indicator bars stacked down the left edge of a multi-page trains view;
+// narrow enough to cost almost no width but tall enough to read at a glance,
+// held off the edge itself by kPageBarEdgePx and with the rows indented past
+// them by kPageBarClearPx
+constexpr int kPageBarEdgePx = 4;
+constexpr int kPageBarWidthPx = 3;
+constexpr int kPageBarHeightPx = 16;
+constexpr int kPageBarGapPx = 6;
+constexpr int kPageBarClearPx = 8;
+
+constexpr int kTrainsPagePadVerPx = 16;
+constexpr int kTrainsPagePadLeftPx = 2;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
 // the font's 8px descent as empty space below them; shift down by half of it
@@ -112,17 +120,31 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
     return obj;
 }
 
+// The board's rows start below the "mins" header, which hangs clear of the
+// display's rounded corner by kBoardHeaderTopPx
+int board_pad_top() {
+    return kBoardHeaderTopPx + lv_font_get_line_height(kCountdownUnitFont);
+}
+
+// Everything left under the header is shared out between the rows, so the sixth
+// one runs to the bottom edge of the screen
+int board_row_gap() {
+    int rows_height = kMaxBoardRows * kBadgeSizePx;
+    return (HW_DISPLAY_HEIGHT_PX - board_pad_top() - rows_height) / (kMaxBoardRows - 1);
+}
+
 // Full-tile column that holds one trains page, rows stacked from the top so
 // the list starts at the same place however many rows it has; non-clickable
 // so taps land on the tile underneath
-lv_obj_t* make_trains_page(lv_obj_t* tile, int32_t gap) {
+lv_obj_t* make_trains_page(lv_obj_t* tile, int32_t gap, int32_t pad_top, int32_t pad_bottom) {
     lv_obj_t* page = lv_obj_create(tile);
     lv_obj_set_size(page, LV_PCT(100), LV_PCT(100));
     lv_obj_align(page, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(page, 0, 0);
-    lv_obj_set_style_pad_ver(page, 16, 0);
-    lv_obj_set_style_pad_left(page, 2, 0);
+    lv_obj_set_style_pad_top(page, pad_top, 0);
+    lv_obj_set_style_pad_bottom(page, pad_bottom, 0);
+    lv_obj_set_style_pad_left(page, kTrainsPagePadLeftPx, 0);
     lv_obj_set_style_pad_right(page, 0, 0);
     lv_obj_set_layout(page, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
@@ -254,32 +276,32 @@ void resolve_trains_page(int entry_count, int rows_per_page, uint8_t& page, uint
     }
 }
 
-// Vertical dot column in the page's right gutter, one dot per page with the
+// Vertical bar column against the page's left edge, one bar per page with the
 // shown page lit; floats outside the flex flow so the rows keep their layout
-void add_page_dots(lv_obj_t* page, int page_count, int active_page) {
+void add_page_bars(lv_obj_t* page, int page_count, int active_page) {
     if (page_count <= 1) {
         return;
     }
-    lv_obj_set_style_pad_right(page, kPageDotGutterPx, 0);
+    lv_obj_set_style_pad_left(page, kPageBarEdgePx + kPageBarWidthPx + kPageBarClearPx, 0);
 
-    lv_obj_t* dots = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageDotGapPx);
-    lv_obj_set_size(dots, kPageDotSizePx, LV_SIZE_CONTENT);
-    lv_obj_add_flag(dots, LV_OBJ_FLAG_FLOATING);
-    lv_obj_align(dots, LV_ALIGN_RIGHT_MID, (kPageDotGutterPx + kPageDotSizePx) / 2, 0);
+    lv_obj_t* bars = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageBarGapPx);
+    lv_obj_set_size(bars, kPageBarWidthPx, LV_SIZE_CONTENT);
+    lv_obj_add_flag(bars, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(bars, LV_ALIGN_LEFT_MID, -(kPageBarWidthPx + kPageBarClearPx), 0);
 
     for (int i = 0; i < page_count; i++) {
-        lv_obj_t* dot = lv_obj_create(dots);
-        lv_obj_set_size(dot, kPageDotSizePx, kPageDotSizePx);
-        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_border_width(dot, 0, 0);
-        lv_obj_set_style_pad_all(dot, 0, 0);
-        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+        lv_obj_t* bar = lv_obj_create(bars);
+        lv_obj_set_size(bar, kPageBarWidthPx, kPageBarHeightPx);
+        lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(bar, 0, 0);
+        lv_obj_set_style_pad_all(bar, 0, 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(
-            dot,
-            lv_color_hex(i == active_page ? THEME_COLOR_TEXT_PRIMARY : THEME_COLOR_SCREENSAVER_PAGE_DOT),
+            bar,
+            lv_color_hex(i == active_page ? THEME_COLOR_TEXT_PRIMARY : THEME_COLOR_SCREENSAVER_PAGE_BAR),
             0);
-        lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
     }
 }
 
@@ -593,8 +615,9 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_container_ = nullptr;
     }
 
-    grouped_container_ = make_trains_page(grouped_tile_, kGroupedRowGapPx);
-    board_container_ = make_trains_page(board_tile_, kBoardRowGapPx);
+    grouped_container_ =
+        make_trains_page(grouped_tile_, kGroupedRowGapPx, kTrainsPagePadVerPx, kTrainsPagePadVerPx);
+    board_container_ = make_trains_page(board_tile_, board_row_gap(), board_pad_top(), 0);
 
     bool stale = arrivals.gateway_stale || device_stale;
     if (!have_data) {
@@ -608,8 +631,8 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 
     add_trains_status(grouped_container_, have_data, grouped_rows, stale);
     add_trains_status(board_container_, have_data, board_rows, stale);
-    add_page_dots(grouped_container_, grouped_page_count_, grouped_page_);
-    add_page_dots(board_container_, board_page_count_, board_page_);
+    add_page_bars(grouped_container_, grouped_page_count_, grouped_page_);
+    add_page_bars(board_container_, board_page_count_, board_page_);
 }
 
 // One entry per watch, in gateway order: bullet + destination/station, then a
@@ -655,11 +678,14 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
 
         // The "mins" label sits centered under the route bullet and the tiles
         // start where the text column does
-        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 8);
+        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, kGroupedTileGapPx);
         lv_obj_t* unit_label = make_unit_label(tiles_row);
         lv_obj_set_width(unit_label, kBadgeSizePx);
         lv_obj_set_style_text_align(unit_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_margin_right(unit_label, 4, 0);
+        lv_obj_set_style_margin_right(unit_label, kGroupedUnitMarginPx, 0);
+
+        // Tiles this large no longer all fit; the row keeps every arrival and
+        // lets the far-out ones run off the right edge
         for (int m = 0; m < entry.count; m++) {
             make_countdown_tile(tiles_row, item, entry.mins[m]);
         }
@@ -696,12 +722,14 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
     int last = std::min(entry_count, first + rows_per_page);
 
     // "mins" column header flush with the countdown digits at the right edge,
-    // pulled down close to the first row
+    // floated near the top of the screen so it leaves the spread rows alone
     if (last > first) {
         lv_obj_t* header = make_unit_label(parent);
         lv_obj_set_width(header, LV_PCT(100));
         lv_obj_set_style_text_align(header, LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_style_margin_bottom(header, -kBoardHeaderTuckPx, 0);
+        lv_obj_add_flag(header, LV_OBJ_FLAG_FLOATING);
+        lv_obj_align(header, LV_ALIGN_TOP_RIGHT, 0,
+                     kBoardHeaderTopPx - lv_obj_get_style_pad_top(parent, LV_PART_MAIN));
     }
 
     for (int i = first; i < last; i++) {
