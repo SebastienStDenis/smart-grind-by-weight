@@ -143,14 +143,18 @@
      slots. The dragged row must stay untransitioned or it lags the pointer, and
      it needs a more specific selector than the rule above to stay that way. */
   body.dragging { user-select: none; cursor: grabbing; }
-  body.dragging li.watch { transition: transform 160ms ease; }
+  body.dragging li.watch { transition: transform 120ms cubic-bezier(0, 0, 0.2, 1); }
   body.dragging li.watch .grip { cursor: grabbing; }
   body.dragging li.watch.drag-active { transition: none; }
+  /* will-change keeps the lifted row on its own layer: without it every frame
+     repaints that blurred shadow, which costs whole frames on a high-DPI
+     screen and makes the row look like it is starting late */
   li.watch.drag-active {
-    position: relative; z-index: 2;
+    position: relative; z-index: 2; will-change: transform;
     background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
     box-shadow: 0 8px 24px var(--shadow);
   }
+  li.watch.settling { position: relative; z-index: 2; will-change: transform; }
   /* The dropped row slides into its slot on a curve that leaves at full speed,
      so motion is visible in the first frame rather than easing in. The duration
      is set per drop from the distance travelled. */
@@ -483,9 +487,11 @@ function endDrag() {
     $("watches").insertBefore(moved, target > index ? rows[target].nextSibling : rows[target]);
   }
 
+  moved.classList.remove("drag-active");
+
   const settle = droppedAt - moved.getBoundingClientRect().top;
   const rest = () => {
-    moved.classList.remove("settling", "drag-active");
+    moved.classList.remove("settling");
     moved.style.removeProperty("--settle");
   };
   if (Math.abs(settle) > 0.5) {
