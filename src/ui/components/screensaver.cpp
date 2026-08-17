@@ -43,7 +43,6 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardRowGapPx = 12;
 constexpr int kBoardHeaderTopPx = 26;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
@@ -54,7 +53,7 @@ const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 // held off the edge itself by kPageBarEdgePx and with the rows indented past
 // them by kPageBarClearPx
 constexpr int kPageBarEdgePx = 4;
-constexpr int kPageBarWidthPx = 3;
+constexpr int kPageBarWidthPx = 2;
 constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
@@ -121,12 +120,17 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
     return obj;
 }
 
-// The board's six rows are spread so the space above the first row - the one
-// the "mins" header hangs in, held clear of the display's rounded corner by
-// kBoardHeaderTopPx - matches the space left below the last
-int board_pad_ver() {
-    int block = kMaxBoardRows * kBadgeSizePx + (kMaxBoardRows - 1) * kBoardRowGapPx;
-    return (HW_DISPLAY_HEIGHT_PX - block) / 2;
+// The board's rows start below the "mins" header, which hangs clear of the
+// display's rounded corner by kBoardHeaderTopPx
+int board_pad_top() {
+    return kBoardHeaderTopPx + lv_font_get_line_height(kCountdownUnitFont);
+}
+
+// Everything left under the header is shared out between the rows, so the sixth
+// one runs to the bottom edge of the screen
+int board_row_gap() {
+    int rows_height = kMaxBoardRows * kBadgeSizePx;
+    return (HW_DISPLAY_HEIGHT_PX - board_pad_top() - rows_height) / (kMaxBoardRows - 1);
 }
 
 // Full-tile column that holds one trains page, rows stacked from the top so
@@ -613,8 +617,7 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 
     grouped_container_ =
         make_trains_page(grouped_tile_, kGroupedRowGapPx, kTrainsPagePadVerPx, kTrainsPagePadVerPx);
-    board_container_ =
-        make_trains_page(board_tile_, kBoardRowGapPx, board_pad_ver(), board_pad_ver());
+    board_container_ = make_trains_page(board_tile_, board_row_gap(), board_pad_top(), 0);
 
     bool stale = arrivals.gateway_stale || device_stale;
     if (!have_data) {
