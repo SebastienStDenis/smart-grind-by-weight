@@ -43,7 +43,8 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardRowGapPx = 18;
+constexpr int kBoardRowGapPx = 16;
+constexpr int kBoardHeaderTopPx = 12;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
@@ -118,8 +119,8 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
 }
 
 // The board's six rows are spread so the space above the first row - the one
-// the "mins" header hangs in, at the very top of the screen - matches the space
-// left below the last
+// the "mins" header hangs in, held clear of the display's rounded corner by
+// kBoardHeaderTopPx - matches the space left below the last
 int board_pad_ver() {
     int block = kMaxBoardRows * kBadgeSizePx + (kMaxBoardRows - 1) * kBoardRowGapPx;
     return (HW_DISPLAY_HEIGHT_PX - block) / 2;
@@ -715,13 +716,14 @@ int ScreensaverOverlay::build_board_rows(lv_obj_t* parent, const TrainArrivals& 
     int last = std::min(entry_count, first + rows_per_page);
 
     // "mins" column header flush with the countdown digits at the right edge,
-    // floated to the top of the screen so it leaves the centered rows alone
+    // floated near the top of the screen so it leaves the spread rows alone
     if (last > first) {
         lv_obj_t* header = make_unit_label(parent);
         lv_obj_set_width(header, LV_PCT(100));
         lv_obj_set_style_text_align(header, LV_TEXT_ALIGN_RIGHT, 0);
         lv_obj_add_flag(header, LV_OBJ_FLAG_FLOATING);
-        lv_obj_align(header, LV_ALIGN_TOP_RIGHT, 0, -lv_obj_get_style_pad_top(parent, LV_PART_MAIN));
+        lv_obj_align(header, LV_ALIGN_TOP_RIGHT, 0,
+                     kBoardHeaderTopPx - lv_obj_get_style_pad_top(parent, LV_PART_MAIN));
     }
 
     for (int i = first; i < last; i++) {
