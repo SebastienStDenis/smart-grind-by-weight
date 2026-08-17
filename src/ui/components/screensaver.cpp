@@ -49,11 +49,11 @@ const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 
-// Page indicator dots stacked along the left edge of a multi-page trains view,
-// with the rows indented past them so nothing sits under the dots
-constexpr int kPageDotSizePx = 6;
-constexpr int kPageDotGapPx = 8;
-constexpr int kPageDotEdgePx = 6;
+// Page indicator dots stacked flush against the left edge of a multi-page
+// trains view, kept small so they stay out of the way; the rows are indented
+// past them by kPageDotClearPx so nothing sits under the dots
+constexpr int kPageDotSizePx = 4;
+constexpr int kPageDotGapPx = 6;
 constexpr int kPageDotClearPx = 8;
 
 constexpr int kTrainsPagePadVerPx = 16;
@@ -269,13 +269,13 @@ void resolve_trains_page(int entry_count, int rows_per_page, uint8_t& page, uint
     }
 }
 
-// Vertical dot column in the page's left gutter, one dot per page with the
+// Vertical dot column against the page's left edge, one dot per page with the
 // shown page lit; floats outside the flex flow so the rows keep their layout
 void add_page_dots(lv_obj_t* page, int page_count, int active_page) {
     if (page_count <= 1) {
         return;
     }
-    lv_obj_set_style_pad_left(page, kPageDotEdgePx + kPageDotSizePx + kPageDotClearPx, 0);
+    lv_obj_set_style_pad_left(page, kPageDotSizePx + kPageDotClearPx, 0);
 
     lv_obj_t* dots = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageDotGapPx);
     lv_obj_set_size(dots, kPageDotSizePx, LV_SIZE_CONTENT);
