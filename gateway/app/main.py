@@ -162,4 +162,6 @@ def delete_watch(index: int) -> list[dict]:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # Revalidate every load; the UI is edited far more often than it is fetched,
+    # and a cached copy silently hides changes
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})

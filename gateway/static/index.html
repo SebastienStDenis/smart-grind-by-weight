@@ -150,10 +150,8 @@
     background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
     box-shadow: 0 8px 24px var(--shadow);
   }
-  /* Carries the row from where it was dropped into its new slot. Kept short
-     with an ease-out that actually arrives - a long tail reads as the row
-     hesitating after the mouse is already up. */
-  li.watch.settling { transition: transform 130ms cubic-bezier(0.33, 1, 0.68, 1); }
+  /* No animation on drop: the row lands the instant the button comes up. Even
+     a short one reads as the row hesitating after the mouse is already gone. */
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -462,9 +460,8 @@ function autoScroll() {
   }, 16);
 }
 
-// The row is moved in the DOM straight away, so the list never flashes back to
-// the old order while the save is in flight, then it slides from where it was
-// dropped into the slot the drag was previewing
+// The row is moved in the DOM the instant the pointer lifts, so the list never
+// flashes back to the old order while the save is in flight
 function endDrag() {
   const { rows, index, target, scrollTimer } = drag;
   clearInterval(scrollTimer);
@@ -473,31 +470,13 @@ function endDrag() {
   removeEventListener("pointercancel", endDrag);
   drag = null;
 
-  const moved = rows[index];
-  const droppedAt = moved.getBoundingClientRect().top;
-
   document.body.classList.remove("dragging");
+  rows[index].classList.remove("drag-active");
   rows.forEach(row => { row.style.transform = ""; });
-  if (target !== index) {
-    $("watches").insertBefore(moved, target > index ? rows[target].nextSibling : rows[target]);
-  }
 
-  // A sub-pixel settle can finish without ever firing transitionend, so the
-  // timer guarantees the lifted styling comes off either way
-  const settle = droppedAt - moved.getBoundingClientRect().top;
-  const rest = () => moved.classList.remove("settling", "drag-active");
-  if (settle) {
-    moved.style.transform = `translateY(${settle}px)`;
-    void moved.offsetHeight;  // flush that start point, so the settle runs from it this frame
-    moved.classList.add("settling");
-    moved.style.transform = "";
-    moved.addEventListener("transitionend", rest, { once: true });
-    setTimeout(rest, 400);
-  } else {
-    rest();
-  }
-
-  if (target !== index) moveWatch(index, target, true);
+  if (target === index) return;
+  $("watches").insertBefore(rows[index], target > index ? rows[target].nextSibling : rows[target]);
+  moveWatch(index, target, true);
 }
 
 function walkControl(index, walkMin) {
