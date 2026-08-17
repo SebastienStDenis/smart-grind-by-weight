@@ -29,6 +29,7 @@
     --rush: #C9A93A;
     --miss: #B8544C;
     --focus: #00AAFF;
+    --shadow: rgba(0, 0, 0, 0.6);
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -50,6 +51,7 @@
       --rush: #A88A1E;
       --miss: #B8544C;
       --focus: #0087CC;
+      --shadow: rgba(0, 0, 0, 0.22);
     }
   }
 
@@ -118,8 +120,6 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
     min-width: 0;
   }
-  /* Reorder arrows keep their slot when disabled at the ends of the list, so
-     the rows never shift as watches move */
   li.watch .actions {
     grid-area: actions; align-self: start;
     display: flex; align-items: center; margin: -0.25rem -0.4rem 0 0;
@@ -133,6 +133,21 @@
   li.watch .actions button:hover:not(:disabled) { color: var(--text); }
   li.watch .actions button:disabled { opacity: 0.25; cursor: default; }
   li.watch .actions button.delete:hover { color: var(--error); }
+  /* touch-action lets the grip claim the gesture, so dragging a watch on a
+     phone reorders it instead of scrolling the page */
+  li.watch .grip { cursor: grab; touch-action: none; }
+  li.watch .grip svg { fill: currentColor; }
+
+  /* Only while a drag is running do the rows animate into their new slots; the
+     dragged row itself tracks the pointer with no lag */
+  body.dragging { user-select: none; cursor: grabbing; }
+  body.dragging li.watch { transition: transform 160ms ease; }
+  body.dragging li.watch .grip { cursor: grabbing; }
+  li.watch.drag-active {
+    position: relative; z-index: 2; transition: none;
+    background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
+    box-shadow: 0 8px 24px var(--shadow);
+  }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -257,6 +272,11 @@ const bullet = (route, tag = "span", small = false) => {
   return el(tag, { className: "bullet" + (small ? " small" : ""), style: `background:${bg};color:${fg}` }, route);
 };
 
+const GRIP_SVG =
+  '<svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" focusable="false">' +
+  [3, 8, 13].map(y => `<circle cx="2" cy="${y}" r="1.5"/><circle cx="8" cy="${y}" r="1.5"/>`).join("") +
+  "</svg>";
+
 let pick = { station: null, route: null, direction: null };
 
 async function api(path, opts) {
@@ -293,35 +313,153 @@ function arrivalsEl(watch, mins, index) {
   return row;
 }
 
-// Move up / move down / remove. The list order is what the grinder's grouped
-// screensaver page shows, so reordering here reorders the watches on the device.
+// A grip to drag the row and a button to remove it. The list order is what the
+// grinder's grouped screensaver page renders, so reordering here reorders the
+// watches on the device.
 function actionsEl(index, count) {
   const box = el("div", { className: "actions" });
-  const move = (label, title, to, disabled) => {
-    const b = el("button", { title, ariaLabel: title, disabled }, label);
-    b.onclick = async () => {
-      try {
-        await api(`/api/watches/${index}/move`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to }),
-        });
-        refreshWatches();
-      } catch (err) {
-        setStatus(err.message, "error");
-      }
-    };
-    return b;
+
+  const grip = el("button", {
+    className: "grip",
+    title: "Drag to reorder",
+    ariaLabel: `Reorder watch ${index + 1} of ${count}, or press the arrow keys`,
+    disabled: count < 2,
+  });
+  grip.innerHTML = GRIP_SVG;
+  grip.onpointerdown = e => startDrag(e, index);
+  grip.onkeydown = e => {
+    const to = e.key === "ArrowUp" ? index - 1 : e.key === "ArrowDown" ? index + 1 : null;
+    if (to === null || to < 0 || to >= count) return;
+    e.preventDefault();
+    moveWatch(index, to);
   };
-  box.append(move("↑", "Move up", index - 1, index === 0),
-             move("↓", "Move down", index + 1, index === count - 1));
-  const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "✕");
+  box.append(grip);
+
+  const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "\u2715");
   del.onclick = async () => {
     await api(`/api/watches/${index}`, { method: "DELETE" });
     refreshWatches();
   };
   box.append(del);
   return box;
+}
+
+async function moveWatch(index, to) {
+  try {
+    await api(`/api/watches/${index}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to }),
+    });
+  } catch (err) {
+    setStatus(err.message, "error");
+  }
+  refreshWatches();
+}
+
+// Drag to reorder. Pointer events cover mouse, touch and pen alike; positions
+// are tracked in page coordinates so edge auto-scrolling stays consistent.
+let drag = null;
+
+function startDrag(e, index) {
+  if (e.button > 0) return;
+  const rows = [...$("watches").children];
+  if (rows.length < 2) return;
+  e.preventDefault();
+
+  const scroll = window.scrollY;
+  drag = {
+    index,
+    target: index,
+    rows,
+    // Page-space midpoint of every row and the dragged row's height, frozen
+    // at drag start
+    mids: rows.map(r => {
+      const box = r.getBoundingClientRect();
+      return box.top + scroll + box.height / 2;
+    }),
+    height: rows[index].getBoundingClientRect().height,
+    startPageY: e.clientY + scroll,
+    clientY: e.clientY,
+    scrollTimer: null,
+  };
+
+  e.currentTarget.setPointerCapture(e.pointerId);
+  document.body.classList.add("dragging");
+  rows[index].classList.add("drag-active");
+  addEventListener("pointermove", onDragMove);
+  addEventListener("pointerup", endDrag);
+  addEventListener("pointercancel", endDrag);
+  updateDrag();
+}
+
+function onDragMove(e) {
+  drag.clientY = e.clientY;
+  updateDrag();
+  autoScroll();
+}
+
+function updateDrag() {
+  const { index, rows, mids, height } = drag;
+  const centre = mids[index] + (drag.clientY + window.scrollY - drag.startPageY);
+
+  let target = index;
+  for (let i = 0; i < index; i++) {
+    if (centre < mids[i]) { target = i; break; }
+  }
+  if (target === index) {
+    for (let i = rows.length - 1; i > index; i--) {
+      if (centre > mids[i]) { target = i; break; }
+    }
+  }
+  drag.target = target;
+
+  rows.forEach((row, i) => {
+    if (i === index) {
+      row.style.transform = `translateY(${centre - mids[i]}px)`;
+      return;
+    }
+    // Rows between the old and new slot close up or open by exactly the gap the
+    // dragged row leaves behind, whatever their own heights are
+    const shift = (i > index && i <= target) ? -height : (i < index && i >= target) ? height : 0;
+    row.style.transform = shift ? `translateY(${shift}px)` : "";
+  });
+}
+
+// Keep scrolling while the pointer rests near the top or bottom of the screen,
+// so a watch can be dragged past the edge of a phone screen
+function autoScroll() {
+  const edge = 72;
+  const speed = drag.clientY < edge ? -12
+    : drag.clientY > innerHeight - edge ? 12
+    : 0;
+  if (!speed) {
+    clearInterval(drag.scrollTimer);
+    drag.scrollTimer = null;
+    return;
+  }
+  if (drag.scrollTimer) return;
+  drag.scrollTimer = setInterval(() => {
+    scrollBy(0, speed);
+    updateDrag();
+  }, 16);
+}
+
+function endDrag() {
+  const { rows, index, target, scrollTimer } = drag;
+  clearInterval(scrollTimer);
+  removeEventListener("pointermove", onDragMove);
+  removeEventListener("pointerup", endDrag);
+  removeEventListener("pointercancel", endDrag);
+
+  // Drop the transition before clearing the offsets so nothing animates back
+  document.body.classList.remove("dragging");
+  rows[index].classList.remove("drag-active");
+  rows.forEach(row => { row.style.transform = ""; });
+  drag = null;
+
+  if (target === index) refreshWatches();
+  else moveWatch(index, target);
 }
 
 function walkControl(index, walkMin) {
@@ -351,8 +489,8 @@ function walkControl(index, walkMin) {
 }
 
 async function refreshWatches() {
-  // Don't rebuild the list under the user's cursor mid-edit
-  if (document.activeElement?.closest?.(".walk")) return;
+  // Don't rebuild the list under the user's cursor mid-drag or mid-edit
+  if (drag || document.activeElement?.closest?.(".walk")) return;
   let watches, arrivals;
   try {
     [watches, arrivals] = await Promise.all([api("/api/watches"), api("/api/arrivals")]);

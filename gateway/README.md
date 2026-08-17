@@ -20,8 +20,8 @@ station, pick a line, pick a direction (shown with friendly labels like
 it takes to walk to that platform. When set, countdowns carry the same tiny
 catch dot as on the grinder: yellow when only a rushed walk still makes the
 train, red when it can't be caught, no dot when it is reachable at a normal pace.
-The arrows on each watch reorder the list, which is the order the grinder's
-grouped screensaver page renders them in.
+Drag a watch by its grip to reorder the list (or focus the grip and use the
+arrow keys); that order is what the grinder's grouped screensaver page renders.
 The page follows the OS light/dark setting and works on phones. Watches persist
 in the `/data` volume.
 
