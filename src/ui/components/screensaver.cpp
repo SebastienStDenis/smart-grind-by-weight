@@ -43,7 +43,7 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardRowGapPx = 10;
+constexpr int kBoardRowGapPx = 12;
 constexpr int kBoardHeaderTopPx = 26;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
@@ -54,7 +54,7 @@ const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 // held off the edge itself by kPageBarEdgePx and with the rows indented past
 // them by kPageBarClearPx
 constexpr int kPageBarEdgePx = 4;
-constexpr int kPageBarWidthPx = 4;
+constexpr int kPageBarWidthPx = 3;
 constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
