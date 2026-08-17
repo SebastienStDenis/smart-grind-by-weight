@@ -39,14 +39,15 @@ constexpr int kCatchDotGapPx = 5;
 constexpr int kBoardHeaderTuckPx = 8;
 
 // Grouped entries (52px badge row + tiles gap + 40px tile row) are spaced so four
-// of them span the page's 424px content height; the tiles take the space the
-// gaps give up so the countdowns read from across the room, and the tighter
-// gap inside an entry keeps it grouped against the wider gap between watches
+// of them span the page's 424px content height, and board rows (52px each,
+// under the header) so six do; the tiles take the space the grouped gaps give
+// up so the countdowns read from across the room, and the tighter gap inside
+// an entry keeps it grouped against the wider gap between watches
 constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardRowGapPx = 12;
+constexpr int kBoardRowGapPx = 17;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
