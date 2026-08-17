@@ -103,8 +103,9 @@
     padding: 0.9rem 0;
     border-bottom: 1px solid var(--border);
   }
-  li.watch:first-child { padding-top: 0.25rem; }
-  li.watch:last-child { border-bottom: 0; }
+  /* Rows must stay the same height as each other: a drag previews the gap using
+     the dragged row's height, so an odd row out would land off the preview */
+  li.watch:last-child { border-bottom-color: transparent; }
   li.watch .bullet { grid-area: bullet; }
   /* One tile tall so the caption stays level with the first row of tiles even
      when the arrivals wrap to a second line on narrow phones */
@@ -150,8 +151,10 @@
     background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
     box-shadow: 0 8px 24px var(--shadow);
   }
-  /* No animation on drop: the row lands the instant the button comes up. Even
-     a short one reads as the row hesitating after the mouse is already gone. */
+  /* The dropped row slides into its slot on a curve that leaves at full speed,
+     so motion is visible in the first frame rather than easing in. The duration
+     is set per drop from the distance travelled. */
+  li.watch.settling { transition: transform var(--settle, 120ms) cubic-bezier(0, 0, 0.2, 1); }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -461,7 +464,8 @@ function autoScroll() {
 }
 
 // The row is moved in the DOM the instant the pointer lifts, so the list never
-// flashes back to the old order while the save is in flight
+// flashes back to the old order while the save is in flight, then it slides
+// from where it was dropped into the slot the drag was previewing.
 function endDrag() {
   const { rows, index, target, scrollTimer } = drag;
   clearInterval(scrollTimer);
@@ -470,13 +474,35 @@ function endDrag() {
   removeEventListener("pointercancel", endDrag);
   drag = null;
 
-  document.body.classList.remove("dragging");
-  rows[index].classList.remove("drag-active");
-  rows.forEach(row => { row.style.transform = ""; });
+  const moved = rows[index];
+  const droppedAt = moved.getBoundingClientRect().top;
 
-  if (target === index) return;
-  $("watches").insertBefore(rows[index], target > index ? rows[target].nextSibling : rows[target]);
-  moveWatch(index, target, true);
+  document.body.classList.remove("dragging");
+  rows.forEach(row => { row.style.transform = ""; });
+  if (target !== index) {
+    $("watches").insertBefore(moved, target > index ? rows[target].nextSibling : rows[target]);
+  }
+
+  const settle = droppedAt - moved.getBoundingClientRect().top;
+  const rest = () => {
+    moved.classList.remove("settling", "drag-active");
+    moved.style.removeProperty("--settle");
+  };
+  if (Math.abs(settle) > 0.5) {
+    moved.style.transform = `translateY(${settle}px)`;
+    void moved.offsetHeight;  // flush the start point before the transition exists
+    // Constant speed rather than constant duration, so a short drop doesn't
+    // crawl the way a fixed duration makes it
+    moved.style.setProperty("--settle", `${Math.min(180, Math.max(70, Math.abs(settle) * 1.1))}ms`);
+    moved.classList.add("settling");
+    moved.style.transform = "";
+    moved.addEventListener("transitionend", rest, { once: true });
+    setTimeout(rest, 400);
+  } else {
+    rest();
+  }
+
+  if (target !== index) moveWatch(index, target, true);
 }
 
 function walkControl(index, walkMin) {
