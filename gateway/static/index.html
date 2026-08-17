@@ -73,16 +73,20 @@
   h2:first-of-type { margin-top: 0; }
 
   /* Route bullets: bold Helvetica with the glyph cap height at ~55% of the
-     diameter, matching official MTA bullets and the grinder's screensaver */
+     diameter, matching official MTA bullets and the grinder's screensaver. The
+     line box carries the font's descent below the baseline, so centring it
+     leaves cap-height glyphs ~0.03em low; the padding lifts them back onto the
+     true centre of the circle (in em, so .small gets the same correction) */
   .bullet {
     display: inline-flex; align-items: center; justify-content: center; flex: none;
     width: 2.75rem; height: 2.75rem; border-radius: 50%;
+    padding-bottom: 0.06em;
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-weight: 700; font-size: 2.1rem; line-height: 1;
     user-select: none;
   }
   .bullet.small { width: 1.5rem; height: 1.5rem; font-size: 1.15rem; }
-  button.bullet { border: 0; padding: 0; cursor: pointer; }
+  button.bullet { border: 0; padding: 0 0 0.06em; cursor: pointer; }
   button.bullet.selected { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--selected); }
 
   ul { list-style: none; margin: 0; padding: 0; }
@@ -90,7 +94,7 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "bullet text     delete"
+      "bullet text     actions"
       "unit   arrivals arrivals";
     column-gap: 0.85rem; row-gap: 0.5rem;
     align-items: start;
@@ -114,13 +118,21 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
     min-width: 0;
   }
-  li.watch .delete {
-    grid-area: delete; align-self: start;
-    width: 2.25rem; height: 2.25rem; margin: -0.25rem -0.5rem 0 0;
-    padding: 0; border: 0; border-radius: 50%; background: none;
-    color: var(--muted); font-size: 1.15rem; line-height: 1; cursor: pointer;
+  /* Reorder arrows keep their slot when disabled at the ends of the list, so
+     the rows never shift as watches move */
+  li.watch .actions {
+    grid-area: actions; align-self: start;
+    display: flex; align-items: center; margin: -0.25rem -0.4rem 0 0;
   }
-  li.watch .delete:hover { color: var(--error); }
+  li.watch .actions button {
+    width: 1.9rem; height: 2rem; min-height: 0; padding: 0;
+    border: 0; border-radius: 0.4rem; background: none;
+    color: var(--muted); font-size: 1.05rem; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  li.watch .actions button:hover:not(:disabled) { color: var(--text); }
+  li.watch .actions button:disabled { opacity: 0.25; cursor: default; }
+  li.watch .actions button.delete:hover { color: var(--error); }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -281,6 +293,37 @@ function arrivalsEl(watch, mins, index) {
   return row;
 }
 
+// Move up / move down / remove. The list order is what the grinder's grouped
+// screensaver page shows, so reordering here reorders the watches on the device.
+function actionsEl(index, count) {
+  const box = el("div", { className: "actions" });
+  const move = (label, title, to, disabled) => {
+    const b = el("button", { title, ariaLabel: title, disabled }, label);
+    b.onclick = async () => {
+      try {
+        await api(`/api/watches/${index}/move`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to }),
+        });
+        refreshWatches();
+      } catch (err) {
+        setStatus(err.message, "error");
+      }
+    };
+    return b;
+  };
+  box.append(move("↑", "Move up", index - 1, index === 0),
+             move("↓", "Move down", index + 1, index === count - 1));
+  const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "✕");
+  del.onclick = async () => {
+    await api(`/api/watches/${index}`, { method: "DELETE" });
+    refreshWatches();
+  };
+  box.append(del);
+  return box;
+}
+
 function walkControl(index, walkMin) {
   const input = el("input", {
     type: "number", min: 1, max: 60, inputMode: "numeric", placeholder: "–",
@@ -326,9 +369,7 @@ async function refreshWatches() {
     const text = el("div", { className: "text" });
     text.append(el("div", { className: "direction" }, w.direction_label),
                 el("div", { className: "station" }, w.station));
-    const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "✕");
-    del.onclick = async () => { await api(`/api/watches/${i}`, { method: "DELETE" }); refreshWatches(); };
-    li.append(bullet(w.route), text, del,
+    li.append(bullet(w.route), text, actionsEl(i, watches.length),
               el("span", { className: "unit" }, mins.length ? "mins" : ""),
               arrivalsEl(w, mins, i));
     list.append(li);

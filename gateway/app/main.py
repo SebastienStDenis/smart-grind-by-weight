@@ -48,6 +48,12 @@ class WatchUpdate(BaseModel):
     walk_min: int | None = Field(None, ge=1, le=config.MAX_WALK_MIN)
 
 
+class WatchMove(BaseModel):
+    # New position for the watch; the list order is what the grinder's grouped
+    # screensaver page renders, so it is the user's running order
+    to: int = Field(ge=0)
+
+
 def watch_view(w: dict) -> dict:
     station = stations.get(w["stop_id"])
     return {
@@ -129,6 +135,17 @@ def update_watch(index: int, update: WatchUpdate) -> list[dict]:
         watches[index].pop("walk_min", None)
     else:
         watches[index]["walk_min"] = update.walk_min
+    config.save_watches(watches)
+    return [watch_view(w) for w in watches]
+
+
+@app.post("/api/watches/{index}/move")
+def move_watch(index: int, move: WatchMove) -> list[dict]:
+    if not 0 <= index < len(watches):
+        raise HTTPException(404, "no such watch")
+    if not 0 <= move.to < len(watches):
+        raise HTTPException(400, f"position must be 0-{len(watches) - 1}")
+    watches.insert(move.to, watches.pop(index))
     config.save_watches(watches)
     return [watch_view(w) for w in watches]
 
