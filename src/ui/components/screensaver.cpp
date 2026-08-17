@@ -38,20 +38,27 @@ constexpr int kCountdownTilePadPx = 8;
 constexpr int kCatchDotGapPx = 5;
 constexpr int kBoardHeaderTuckPx = 8;
 
-// Grouped entries (52px badge row + tiles gap + 30px tile row) are spaced so four
-// of them span the page's 424px content height; fewer still stack from the top
-constexpr int kGroupedTilesGapPx = 8;
-constexpr int kGroupedRowGapPx = 21;
+// Grouped entries (52px badge row + tiles gap + 40px tile row) are spaced so four
+// of them span the page's 424px content height; the tiles take the space the
+// gaps give up so the countdowns read from across the room, and the tighter
+// gap inside an entry keeps it grouped against the wider gap between watches
+constexpr int kGroupedTilesGapPx = 4;
+constexpr int kGroupedRowGapPx = 13;
+constexpr int kGroupedTileGapPx = 8;
+constexpr int kGroupedUnitMarginPx = 4;
 constexpr int kBoardRowGapPx = 12;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
-const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_28;
+const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 
 // Page indicator dots stacked along the right edge of a multi-page trains
 // view; the rows shrink by the gutter width so nothing sits under the dots
 constexpr int kPageDotSizePx = 6;
 constexpr int kPageDotGapPx = 8;
 constexpr int kPageDotGutterPx = 14;
+
+constexpr int kTrainsPagePadVerPx = 16;
+constexpr int kTrainsPagePadLeftPx = 2;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
 // the font's 8px descent as empty space below them; shift down by half of it
@@ -121,8 +128,8 @@ lv_obj_t* make_trains_page(lv_obj_t* tile, int32_t gap) {
     lv_obj_align(page, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(page, 0, 0);
-    lv_obj_set_style_pad_ver(page, 16, 0);
-    lv_obj_set_style_pad_left(page, 2, 0);
+    lv_obj_set_style_pad_ver(page, kTrainsPagePadVerPx, 0);
+    lv_obj_set_style_pad_left(page, kTrainsPagePadLeftPx, 0);
     lv_obj_set_style_pad_right(page, 0, 0);
     lv_obj_set_layout(page, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
@@ -182,6 +189,21 @@ lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t
 }
 
 // Grouped-view countdown in a rounded tile
+// Width a countdown tile will take once laid out, so a row can be filled to
+// the edge of the screen instead of clipping whatever runs past it
+int countdown_tile_width(const TrainArrivalItem& item, uint8_t mins) {
+    char text[4];
+    snprintf(text, sizeof(text), "%u", mins);
+    int width = 2 * kCountdownTilePadPx;
+    for (const char* c = text; *c != '\0'; c++) {
+        width += lv_font_get_glyph_width(kTileCountdownFont, static_cast<uint32_t>(*c), 0);
+    }
+    if (arrival_catch_color(item.walk_min, mins) != kNoCatchWarning) {
+        width += kCatchDotSizePx + kCatchDotGapPx;
+    }
+    return width;
+}
+
 void make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
     lv_obj_t* tile = make_countdown(parent, item, mins, kTileCountdownFont);
     lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
@@ -655,12 +677,28 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
 
         // The "mins" label sits centered under the route bullet and the tiles
         // start where the text column does
-        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, 8);
+        lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, kGroupedTileGapPx);
         lv_obj_t* unit_label = make_unit_label(tiles_row);
         lv_obj_set_width(unit_label, kBadgeSizePx);
         lv_obj_set_style_text_align(unit_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_margin_right(unit_label, 4, 0);
+        lv_obj_set_style_margin_right(unit_label, kGroupedUnitMarginPx, 0);
+
+        // Tiles this large no longer all fit, so the row takes the soonest
+        // arrivals it has room for and leaves the rest to the board view
+        int room = HW_DISPLAY_WIDTH_PX - kTrainsPagePadLeftPx - kBadgeSizePx -
+                   kGroupedUnitMarginPx - kGroupedTileGapPx;
+        if (grouped_page_count_ > 1) {
+            room -= kPageDotGutterPx;
+        }
         for (int m = 0; m < entry.count; m++) {
+            int needed = countdown_tile_width(item, entry.mins[m]);
+            if (m > 0) {
+                needed += kGroupedTileGapPx;
+            }
+            if (needed > room) {
+                break;
+            }
+            room -= needed;
             make_countdown_tile(tiles_row, item, entry.mins[m]);
         }
     }
