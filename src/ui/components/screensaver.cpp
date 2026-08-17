@@ -43,18 +43,21 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardRowGapPx = 16;
-constexpr int kBoardHeaderTopPx = 12;
+constexpr int kBoardRowGapPx = 10;
+constexpr int kBoardHeaderTopPx = 26;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 
-// Page indicator dots stacked flush against the left edge of a multi-page
-// trains view, kept small so they stay out of the way; the rows are indented
-// past them by kPageDotClearPx so nothing sits under the dots
-constexpr int kPageDotSizePx = 4;
-constexpr int kPageDotGapPx = 6;
-constexpr int kPageDotClearPx = 8;
+// Page indicator bars stacked down the left edge of a multi-page trains view;
+// narrow enough to cost almost no width but tall enough to read at a glance,
+// held off the edge itself by kPageBarEdgePx and with the rows indented past
+// them by kPageBarClearPx
+constexpr int kPageBarEdgePx = 4;
+constexpr int kPageBarWidthPx = 4;
+constexpr int kPageBarHeightPx = 16;
+constexpr int kPageBarGapPx = 6;
+constexpr int kPageBarClearPx = 8;
 
 constexpr int kTrainsPagePadVerPx = 16;
 constexpr int kTrainsPagePadLeftPx = 2;
@@ -269,32 +272,32 @@ void resolve_trains_page(int entry_count, int rows_per_page, uint8_t& page, uint
     }
 }
 
-// Vertical dot column against the page's left edge, one dot per page with the
+// Vertical bar column against the page's left edge, one bar per page with the
 // shown page lit; floats outside the flex flow so the rows keep their layout
-void add_page_dots(lv_obj_t* page, int page_count, int active_page) {
+void add_page_bars(lv_obj_t* page, int page_count, int active_page) {
     if (page_count <= 1) {
         return;
     }
-    lv_obj_set_style_pad_left(page, kPageDotSizePx + kPageDotClearPx, 0);
+    lv_obj_set_style_pad_left(page, kPageBarEdgePx + kPageBarWidthPx + kPageBarClearPx, 0);
 
-    lv_obj_t* dots = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageDotGapPx);
-    lv_obj_set_size(dots, kPageDotSizePx, LV_SIZE_CONTENT);
-    lv_obj_add_flag(dots, LV_OBJ_FLAG_FLOATING);
-    lv_obj_align(dots, LV_ALIGN_LEFT_MID, -(kPageDotSizePx + kPageDotClearPx), 0);
+    lv_obj_t* bars = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageBarGapPx);
+    lv_obj_set_size(bars, kPageBarWidthPx, LV_SIZE_CONTENT);
+    lv_obj_add_flag(bars, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(bars, LV_ALIGN_LEFT_MID, -(kPageBarWidthPx + kPageBarClearPx), 0);
 
     for (int i = 0; i < page_count; i++) {
-        lv_obj_t* dot = lv_obj_create(dots);
-        lv_obj_set_size(dot, kPageDotSizePx, kPageDotSizePx);
-        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_border_width(dot, 0, 0);
-        lv_obj_set_style_pad_all(dot, 0, 0);
-        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+        lv_obj_t* bar = lv_obj_create(bars);
+        lv_obj_set_size(bar, kPageBarWidthPx, kPageBarHeightPx);
+        lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(bar, 0, 0);
+        lv_obj_set_style_pad_all(bar, 0, 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(
-            dot,
-            lv_color_hex(i == active_page ? THEME_COLOR_TEXT_PRIMARY : THEME_COLOR_SCREENSAVER_PAGE_DOT),
+            bar,
+            lv_color_hex(i == active_page ? THEME_COLOR_TEXT_PRIMARY : THEME_COLOR_SCREENSAVER_PAGE_BAR),
             0);
-        lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
     }
 }
 
@@ -625,8 +628,8 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 
     add_trains_status(grouped_container_, have_data, grouped_rows, stale);
     add_trains_status(board_container_, have_data, board_rows, stale);
-    add_page_dots(grouped_container_, grouped_page_count_, grouped_page_);
-    add_page_dots(board_container_, board_page_count_, board_page_);
+    add_page_bars(grouped_container_, grouped_page_count_, grouped_page_);
+    add_page_bars(board_container_, board_page_count_, board_page_);
 }
 
 // One entry per watch, in gateway order: bullet + destination/station, then a
