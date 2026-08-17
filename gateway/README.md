@@ -16,11 +16,14 @@ docker run -d --name mta-gateway --restart unless-stopped \
 
 Open `http://localhost:8600` to configure which trains to watch: search a
 station, pick a line, pick a direction (shown with friendly labels like
-"→ Manhattan"). Each watch also takes an optional 🚶 walk time — how many
-minutes it takes to walk to that platform. When set, arrival times are
-color-coded (here and on the grinder): green when the train is reachable at a
-normal pace, yellow when only a rushed walk still makes it, red when it can't
-be caught. Watches persist in the `/data` volume.
+"→ Manhattan"). Each watch also takes an optional walk time - how many minutes
+it takes to walk to that platform. When set, countdowns carry the same tiny
+catch dot as on the grinder: yellow when only a rushed walk still makes the
+train, red when it can't be caught, no dot when it is reachable at a normal pace.
+Drag a watch by its grip to reorder the list (or focus the grip and use the
+arrow keys); that order is what the grinder's grouped screensaver page renders.
+The page follows the OS light/dark setting and works on phones. Watches persist
+in the `/data` volume.
 
 ## API
 
@@ -45,6 +48,7 @@ old to trust.
 
 Also: `GET /api/health`, `GET /api/stations?q=`, `GET/POST /api/watches`,
 `PATCH /api/watches/{index}` (set/clear `walk_min`),
+`POST /api/watches/{index}/move` (`{"to": n}`, reorders the list),
 `DELETE /api/watches/{index}`.
 
 ## Development

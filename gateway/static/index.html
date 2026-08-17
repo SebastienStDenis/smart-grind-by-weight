@@ -3,68 +3,255 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>MTA Gateway</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚇</text></svg>">
 <style>
-  :root { color-scheme: light dark; }
+  /* Dark palette mirrors the grinder screen (src/config/theme.h); light is the
+     same design on a white ground for OS light mode. */
+  :root {
+    color-scheme: dark light;
+    --bg: #000000;
+    --surface: #141414;
+    --pill: #2A2A2A;
+    --button: #3A3A3A;
+    --button-hover: #4A4A4A;
+    --border: #262626;
+    --text: #FFFFFF;
+    --text-secondary: #CCCCCC;
+    --muted: #8A8A8A;
+    --accent: #00AAFF;
+    --accent-text: #FFFFFF;
+    --selected: #FFFFFF;
+    --selected-text: #000000;
+    --warning: #E39A00;
+    --error: #FF5B52;
+    --rush: #C9A93A;
+    --miss: #B8544C;
+    --focus: #00AAFF;
+    --shadow: rgba(0, 0, 0, 0.6);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #F4F4F4;
+      --surface: #FFFFFF;
+      --pill: #E4E4E4;
+      --button: #E4E4E4;
+      --button-hover: #D6D6D6;
+      --border: #DCDCDC;
+      --text: #111111;
+      --text-secondary: #444444;
+      --muted: #737373;
+      --accent: #0087CC;
+      --accent-text: #FFFFFF;
+      --selected: #111111;
+      --selected-text: #FFFFFF;
+      --warning: #A86D00;
+      --error: #D0302A;
+      --rush: #A88A1E;
+      --miss: #B8544C;
+      --focus: #0087CC;
+      --shadow: rgba(0, 0, 0, 0.22);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
-    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
-    max-width: 640px; margin: 2rem auto; padding: 0 1rem;
-    background: #111; color: #eee;
+    margin: 0;
+    padding: 1.25rem 1rem 3rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Montserrat, -apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    line-height: 1.35;
   }
-  h1 { font-size: 1.3rem; }
-  h2 { font-size: 1rem; margin-top: 2rem; color: #aaa; }
-  .badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 2rem; height: 2rem; border-radius: 50%;
-    font-weight: 700; font-size: 1.1rem; flex: none;
+  main { max-width: 640px; margin: 0 auto; }
+
+  h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 1.5rem; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 2rem 0 0.75rem;
   }
-  ul { list-style: none; padding: 0; }
+  h2:first-of-type { margin-top: 0; }
+
+  /* Route bullets: bold Helvetica with the glyph cap height at ~55% of the
+     diameter, matching official MTA bullets and the grinder's screensaver. The
+     line box carries the font's descent below the baseline, so centring it
+     leaves cap-height glyphs ~0.03em low; the padding lifts them back onto the
+     true centre of the circle (in em, so .small gets the same correction) */
+  .bullet {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 2.75rem; height: 2.75rem; border-radius: 50%;
+    padding-bottom: 0.06em;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 700; font-size: 2.1rem; line-height: 1;
+    user-select: none;
+  }
+  .bullet.small { width: 1.5rem; height: 1.5rem; font-size: 1.15rem; }
+  button.bullet { border: 0; padding: 0 0 0.06em; cursor: pointer; }
+  button.bullet.selected { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--selected); }
+
+  ul { list-style: none; margin: 0; padding: 0; }
   li.watch {
-    display: flex; align-items: center; gap: .75rem;
-    padding: .6rem .5rem; border-bottom: 1px solid #333;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "bullet text     actions"
+      "unit   arrivals arrivals";
+    column-gap: 0.85rem; row-gap: 0.5rem;
+    align-items: start;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--border);
   }
-  .mins { margin-left: auto; color: #8f8; font-variant-numeric: tabular-nums; }
-  .mins.empty { color: #666; }
-  .mins .ok { color: #4dd964; }
-  .mins .rush { color: #ffd60a; }
-  .mins .miss { color: #ff5b52; }
-  .walk-chip { display: inline-flex; align-items: center; gap: .25rem; flex: none; color: #888; }
-  input.walk {
-    width: 3.4rem; padding: .25rem .3rem; text-align: right;
-    -moz-appearance: textfield;
+  li.watch:first-child { padding-top: 0.25rem; }
+  li.watch:last-child { border-bottom: 0; }
+  li.watch .bullet { grid-area: bullet; }
+  /* One tile tall so the caption stays level with the first row of tiles even
+     when the arrivals wrap to a second line on narrow phones */
+  li.watch .unit {
+    grid-area: unit; align-self: start; height: 2rem;
+    display: flex; align-items: center; justify-content: center;
   }
-  button {
-    background: #333; color: #eee; border: 1px solid #555;
-    border-radius: .4rem; padding: .4rem .8rem; cursor: pointer; font-size: .95rem;
+  li.watch .text { grid-area: text; min-width: 0; padding-top: 0.15rem; }
+  li.watch .direction { font-size: 1.1rem; font-weight: 600; overflow-wrap: anywhere; }
+  li.watch .station { font-size: 0.95rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+  li.watch .arrivals {
+    grid-area: arrivals;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+    min-width: 0;
   }
-  button:hover { background: #444; }
-  button.selected { background: #eee; color: #111; }
-  button.delete { border: none; background: none; color: #c66; font-size: 1.1rem; }
+  li.watch .actions {
+    grid-area: actions; align-self: start;
+    display: flex; align-items: center; margin: -0.25rem -0.4rem 0 0;
+  }
+  li.watch .actions button {
+    width: 1.9rem; height: 2rem; min-height: 0; padding: 0;
+    border: 0; border-radius: 0.4rem; background: none;
+    color: var(--muted); font-size: 1.05rem; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  li.watch .actions button:hover:not(:disabled) { color: var(--text); }
+  li.watch .actions button:disabled { opacity: 0.25; cursor: default; }
+  li.watch .actions button.delete:hover { color: var(--error); }
+  /* touch-action lets the grip claim the gesture, so dragging a watch on a
+     phone reorders it instead of scrolling the page */
+  li.watch .grip { cursor: grab; touch-action: none; }
+  li.watch .grip svg { fill: currentColor; }
+
+  /* Only while a drag is running do the displaced rows animate into their new
+     slots. The dragged row must stay untransitioned or it lags the pointer, and
+     it needs a more specific selector than the rule above to stay that way. */
+  body.dragging { user-select: none; cursor: grabbing; }
+  body.dragging li.watch { transition: transform 160ms ease; }
+  body.dragging li.watch .grip { cursor: grabbing; }
+  body.dragging li.watch.drag-active { transition: none; }
+  li.watch.drag-active {
+    position: relative; z-index: 2;
+    background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
+    box-shadow: 0 8px 24px var(--shadow);
+  }
+  /* Carries the row from where it was dropped down into its new slot */
+  li.watch.settling { transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+  li.empty { color: var(--muted); padding: 0.5rem 0; }
+
+  /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
+     rounded tiles led by a single tiny "mins" label, with a small muted dot
+     before the number flagging a rushed or missed catch. Tiles are sized by
+     their content, so a single digit never pads out to a two-digit width. */
+  .unit { color: var(--text-secondary); font-size: 0.7rem; line-height: 1; }
+  .tile {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 2rem; padding: 0 8px;
+    border-radius: 10px; background: var(--pill); color: var(--text);
+    font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .tile .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .tile.rush .dot { background: var(--rush); }
+  .tile.miss .dot { background: var(--miss); }
+  .no-trains { color: var(--muted); font-size: 0.95rem; }
+
+  .walk {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    margin-left: auto; color: var(--muted); font-size: 0.9rem; white-space: nowrap;
+  }
+  .walk input {
+    width: 3.4rem; height: 2rem; padding: 0 0.5rem;
+    text-align: right; font-size: 1rem; font-weight: 600;
+    -moz-appearance: textfield; appearance: textfield;
+    border-radius: 10px; border: 0; background: var(--pill);
+  }
+  .walk input::-webkit-outer-spin-button,
+  .walk input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
   input {
-    width: 100%; box-sizing: border-box; padding: .5rem;
-    background: #222; color: #eee; border: 1px solid #555; border-radius: .4rem;
-    font-size: 1rem;
+    width: 100%; padding: 0.7rem 0.9rem;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 20px;
+    font: inherit; font-size: 1rem;
   }
-  .row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; align-items: center; }
-  #status { color: #888; font-size: .85rem; margin-top: 2rem; }
-  .muted { color: #888; }
+  input:focus-visible, button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+  input::placeholder { color: var(--muted); }
+
+  button {
+    background: var(--button); color: var(--text); border: 0;
+    border-radius: 20px; padding: 0.55rem 0.95rem; min-height: 2.5rem;
+    cursor: pointer; font: inherit; font-size: 0.95rem; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    text-align: left; max-width: 100%;
+  }
+  button:hover { background: var(--button-hover); }
+  button.selected { background: var(--selected); color: var(--selected-text); }
+  button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; padding: 0.65rem 1.4rem; }
+  button.primary:hover { filter: brightness(1.08); }
+  button .bullets { display: inline-flex; gap: 0.2rem; }
+  button .label { overflow-wrap: anywhere; }
+
+  .step { margin: 0.9rem 0; }
+  .step[hidden] { display: none; }
+  .step-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+  #status { color: var(--muted); font-size: 0.85rem; margin: 2.5rem 0 0; }
+  #status.warn { color: var(--warning); }
+  #status.error { color: var(--error); }
+
+  @media (max-width: 420px) {
+    body { padding: 1rem 0.85rem 2.5rem; }
+    h1 { font-size: 1.3rem; margin-bottom: 1.25rem; }
+    li.watch { column-gap: 0.7rem; }
+    li.watch .bullet { width: 2.5rem; height: 2.5rem; font-size: 1.9rem; }
+  }
 </style>
 </head>
 <body>
-<h1>🚇 MTA Gateway</h1>
+<main>
+<h1>MTA Gateway</h1>
+
+<h2>Add a watch</h2>
+<input id="search" placeholder="Search stations" autocomplete="off" inputmode="search">
+<div class="step" id="results-step" hidden>
+  <div class="step-label">Station</div>
+  <div class="row" id="results"></div>
+</div>
+<div class="step" id="routes-step" hidden>
+  <div class="step-label">Line</div>
+  <div class="row" id="routes"></div>
+</div>
+<div class="step" id="directions-step" hidden>
+  <div class="step-label">Direction</div>
+  <div class="row" id="directions"></div>
+</div>
+<div class="step" id="add-step" hidden>
+  <button id="add" class="primary">Add watch</button>
+</div>
 
 <h2>Watching</h2>
 <ul id="watches"></ul>
 
-<h2>Add a watch</h2>
-<input id="search" placeholder="Search stations…" autocomplete="off">
-<div class="row" id="results"></div>
-<div class="row" id="routes"></div>
-<div class="row" id="directions"></div>
-<div class="row"><button id="add" hidden>Add watch</button></div>
-
 <p id="status"></p>
+</main>
 
 <script>
 const COLORS = {
@@ -84,10 +271,15 @@ const el = (tag, props = {}, text = "") => {
   if (text) e.textContent = text;
   return e;
 };
-const badge = route => {
+const bullet = (route, tag = "span", small = false) => {
   const [bg, fg] = COLORS[route] || ["#808183", "#fff"];
-  return el("span", { className: "badge", style: `background:${bg};color:${fg}` }, route);
+  return el(tag, { className: "bullet" + (small ? " small" : ""), style: `background:${bg};color:${fg}` }, route);
 };
+
+const GRIP_SVG =
+  '<svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" focusable="false">' +
+  [3, 8, 13].map(y => `<circle cx="2" cy="${y}" r="1.5"/><circle cx="8" cy="${y}" r="1.5"/>`).join("") +
+  "</svg>";
 
 let pick = { station: null, route: null, direction: null };
 
@@ -97,30 +289,220 @@ async function api(path, opts) {
   return resp.json();
 }
 
-// Same thresholds as the grinder: green when the train is reachable at a
-// normal pace, yellow only by rushing (walk covered in 75% of normal time),
-// red when it can't be made.
-const walkClass = (walkMin, m) => {
-  if (!walkMin) return "";
-  if (m >= walkMin) return "ok";
+function setStatus(text, kind = "") {
+  const status = $("status");
+  status.textContent = text;
+  status.className = kind;
+}
+
+// Same thresholds as the grinder: unflagged when the train is reachable at a
+// normal pace, yellow dot when only rushing makes it (walk covered in 75% of
+// normal time), red dot when it can't be made.
+const catchClass = (walkMin, m) => {
+  if (!walkMin || m >= walkMin) return "";
   return m >= Math.ceil(walkMin * 0.75) ? "rush" : "miss";
 };
 
-function minsEl(watch, mins) {
-  const span = el("span", { className: "mins" + (mins.length ? "" : " empty") });
-  if (!mins.length) { span.textContent = "no data"; return span; }
-  mins.forEach((m, j) => {
-    if (j) span.append(", ");
-    span.append(el("span", { className: walkClass(watch.walk_min, m) }, `${m}`));
+function arrivalsEl(watch, mins, index) {
+  const row = el("div", { className: "arrivals" });
+  if (!mins.length) row.append(el("span", { className: "no-trains" }, "No upcoming trains"));
+  mins.forEach(m => {
+    const flag = catchClass(watch.walk_min, m);
+    const tile = el("span", { className: "tile " + flag });
+    if (flag) tile.append(el("span", { className: "dot" }));
+    tile.append(`${m}`);
+    row.append(tile);
   });
-  span.append(" min");
-  return span;
+  row.append(walkControl(index, watch.walk_min));
+  return row;
 }
 
-function walkChip(index, walkMin) {
+// A grip to drag the row and a button to remove it. The list order is what the
+// grinder's grouped screensaver page renders, so reordering here reorders the
+// watches on the device.
+//
+// Handlers read the row's live position rather than the index they were built
+// with, so a drop that reorders the DOM before the server confirms can't make a
+// later click act on the wrong watch.
+const rowIndex = node => [...$("watches").children].indexOf(node.closest("li.watch"));
+
+function actionsEl(index, count) {
+  const box = el("div", { className: "actions" });
+
+  const grip = el("button", {
+    className: "grip",
+    title: "Drag to reorder",
+    ariaLabel: `Reorder watch ${index + 1} of ${count}, or press the arrow keys`,
+    disabled: count < 2,
+  });
+  grip.innerHTML = GRIP_SVG;
+  grip.onpointerdown = startDrag;
+  grip.onkeydown = e => {
+    const from = rowIndex(e.currentTarget);
+    const to = e.key === "ArrowUp" ? from - 1 : e.key === "ArrowDown" ? from + 1 : null;
+    if (to === null || to < 0 || to >= $("watches").children.length) return;
+    e.preventDefault();
+    moveWatch(from, to);
+  };
+  box.append(grip);
+
+  const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "\u2715");
+  del.onclick = async e => {
+    await api(`/api/watches/${rowIndex(e.currentTarget)}`, { method: "DELETE" });
+    refreshWatches();
+  };
+  box.append(del);
+  return box;
+}
+
+// applied === true when the row has already been moved in the DOM, so a
+// successful save needs no repaint; a rejection still resyncs from the server
+async function moveWatch(index, to, applied = false) {
+  try {
+    await api(`/api/watches/${index}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to }),
+    });
+    if (!applied) refreshWatches();
+  } catch (err) {
+    setStatus(err.message, "error");
+    refreshWatches();
+  }
+}
+
+// Drag to reorder. Pointer events cover mouse, touch and pen alike; positions
+// are tracked in page coordinates so edge auto-scrolling stays consistent.
+let drag = null;
+
+function startDrag(e) {
+  if (e.button > 0) return;
+  const rows = [...$("watches").children];
+  const index = rowIndex(e.currentTarget);
+  if (rows.length < 2 || index < 0) return;
+  e.preventDefault();
+
+  const scroll = window.scrollY;
+  drag = {
+    index,
+    target: index,
+    rows,
+    // Page-space midpoint of every row and the dragged row's height, frozen
+    // at drag start
+    mids: rows.map(r => {
+      const box = r.getBoundingClientRect();
+      return box.top + scroll + box.height / 2;
+    }),
+    height: rows[index].getBoundingClientRect().height,
+    startPageY: e.clientY + scroll,
+    clientY: e.clientY,
+    scrollTimer: null,
+  };
+
+  e.currentTarget.setPointerCapture(e.pointerId);
+  document.body.classList.add("dragging");
+  rows[index].classList.add("drag-active");
+  addEventListener("pointermove", onDragMove);
+  addEventListener("pointerup", endDrag);
+  addEventListener("pointercancel", endDrag);
+  updateDrag();
+}
+
+function onDragMove(e) {
+  drag.clientY = e.clientY;
+  updateDrag();
+  autoScroll();
+}
+
+function updateDrag() {
+  const { index, rows, mids, height } = drag;
+  const centre = mids[index] + (drag.clientY + window.scrollY - drag.startPageY);
+
+  let target = index;
+  for (let i = 0; i < index; i++) {
+    if (centre < mids[i]) { target = i; break; }
+  }
+  if (target === index) {
+    for (let i = rows.length - 1; i > index; i--) {
+      if (centre > mids[i]) { target = i; break; }
+    }
+  }
+  drag.target = target;
+
+  rows.forEach((row, i) => {
+    if (i === index) {
+      row.style.transform = `translateY(${centre - mids[i]}px)`;
+      return;
+    }
+    // Rows between the old and new slot close up or open by exactly the gap the
+    // dragged row leaves behind, whatever their own heights are
+    const shift = (i > index && i <= target) ? -height : (i < index && i >= target) ? height : 0;
+    row.style.transform = shift ? `translateY(${shift}px)` : "";
+  });
+}
+
+// Keep scrolling while the pointer rests near the top or bottom of the screen,
+// so a watch can be dragged past the edge of a phone screen
+function autoScroll() {
+  const edge = 72;
+  const speed = drag.clientY < edge ? -12
+    : drag.clientY > innerHeight - edge ? 12
+    : 0;
+  if (!speed) {
+    clearInterval(drag.scrollTimer);
+    drag.scrollTimer = null;
+    return;
+  }
+  if (drag.scrollTimer) return;
+  drag.scrollTimer = setInterval(() => {
+    scrollBy(0, speed);
+    updateDrag();
+  }, 16);
+}
+
+// The row is moved in the DOM straight away, so the list never flashes back to
+// the old order while the save is in flight, then it slides from where it was
+// dropped into the slot the drag was previewing
+function endDrag() {
+  const { rows, index, target, scrollTimer } = drag;
+  clearInterval(scrollTimer);
+  removeEventListener("pointermove", onDragMove);
+  removeEventListener("pointerup", endDrag);
+  removeEventListener("pointercancel", endDrag);
+  drag = null;
+
+  const moved = rows[index];
+  const droppedAt = moved.getBoundingClientRect().top;
+
+  document.body.classList.remove("dragging");
+  rows.forEach(row => { row.style.transform = ""; });
+  if (target !== index) {
+    $("watches").insertBefore(moved, target > index ? rows[target].nextSibling : rows[target]);
+  }
+
+  // A sub-pixel settle can finish without ever firing transitionend, so the
+  // timer guarantees the lifted styling comes off either way
+  const settle = droppedAt - moved.getBoundingClientRect().top;
+  const rest = () => moved.classList.remove("settling", "drag-active");
+  if (settle) {
+    moved.style.transform = `translateY(${settle}px)`;
+    moved.addEventListener("transitionend", rest, { once: true });
+    setTimeout(rest, 400);
+    requestAnimationFrame(() => {
+      moved.classList.add("settling");
+      moved.style.transform = "";
+    });
+  } else {
+    rest();
+  }
+
+  if (target !== index) moveWatch(index, target, true);
+}
+
+function walkControl(index, walkMin) {
   const input = el("input", {
-    className: "walk", type: "number", min: 1, max: 60, placeholder: "–",
-    title: "Walk time to platform (minutes) — leave empty for no estimate",
+    type: "number", min: 1, max: 60, inputMode: "numeric", placeholder: "–",
+    title: "Walk time to platform in minutes, leave empty for no estimate",
     value: walkMin ?? "",
   });
   input.onchange = async () => {
@@ -135,53 +517,65 @@ function walkChip(index, walkMin) {
       input.blur();  // Enter keeps focus; release it so the refresh isn't skipped
       refreshWatches();
     } catch (err) {
-      $("status").textContent = "⚠ " + err.message;
+      setStatus(err.message, "error");
     }
   };
-  const chip = el("span", { className: "walk-chip", title: "Walk time to platform (minutes)" }, "🚶");
-  chip.append(input);
-  return chip;
+  const control = el("label", { className: "walk" }, "Walk");
+  control.append(input, "mins");
+  return control;
 }
 
 async function refreshWatches() {
-  // Don't rebuild the list under the user's cursor mid-edit
-  if (document.activeElement?.classList?.contains("walk")) return;
-  const [watches, arrivals] = await Promise.all([api("/api/watches"), api("/api/arrivals")]);
+  // Don't rebuild the list under the user's cursor mid-drag or mid-edit
+  if (drag || document.activeElement?.closest?.(".walk")) return;
+  let watches, arrivals;
+  try {
+    [watches, arrivals] = await Promise.all([api("/api/watches"), api("/api/arrivals")]);
+  } catch (err) {
+    setStatus("Gateway unreachable: " + err.message, "error");
+    return;
+  }
   const list = $("watches");
   list.replaceChildren();
-  if (!watches.length) list.append(el("li", { className: "muted" }, "Nothing yet — add a watch below."));
+  if (!watches.length) list.append(el("li", { className: "empty" }, "Nothing yet. Add a watch below."));
   watches.forEach((w, i) => {
     const li = el("li", { className: "watch" });
     const mins = arrivals.items[i]?.mins || [];
-    const del = el("button", { className: "delete", title: "Remove" }, "✕");
-    del.onclick = async () => { await api(`/api/watches/${i}`, { method: "DELETE" }); refreshWatches(); };
-    li.append(badge(w.route), el("span", {}, `${w.station} → ${w.direction_label}`),
-              minsEl(w, mins), walkChip(i, w.walk_min), del);
+    const text = el("div", { className: "text" });
+    text.append(el("div", { className: "direction" }, w.direction_label),
+                el("div", { className: "station" }, w.station));
+    li.append(bullet(w.route), text, actionsEl(i, watches.length),
+              el("span", { className: "unit" }, mins.length ? "mins" : ""),
+              arrivalsEl(w, mins, i));
     list.append(li);
   });
-  $("status").textContent = arrivals.stale
-    ? "⚠ MTA data is stale or not yet fetched"
-    : `MTA data updated ${arrivals.age_s}s ago`;
+  if (arrivals.stale) setStatus("MTA data is stale or not yet fetched", "warn");
+  else setStatus(`MTA data updated ${arrivals.age_s}s ago`);
 }
 
 function renderPicker(stationsFound) {
   const results = $("results");
   results.replaceChildren();
   stationsFound.forEach(s => {
-    const b = el("button", {}, `${s.name} (${s.routes.join(" ")})`);
+    const b = el("button", {});
+    const bullets = el("span", { className: "bullets" });
+    s.routes.forEach(r => bullets.append(bullet(r, "span", true)));
+    b.append(el("span", { className: "label" }, s.name), bullets);
     if (pick.station?.stop_id === s.stop_id) b.classList.add("selected");
     b.onclick = () => { pick = { station: s, route: null, direction: null }; renderPicker(stationsFound); };
     results.append(b);
   });
+  $("results-step").hidden = !stationsFound.length;
+
   const routes = $("routes");
   routes.replaceChildren();
   const dirs = $("directions");
   dirs.replaceChildren();
   if (pick.station) {
     pick.station.routes.forEach(r => {
-      const b = badge(r);
-      b.style.cursor = "pointer";
-      if (pick.route === r) b.style.outline = "3px solid #eee";
+      const b = bullet(r, "button");
+      b.title = `${r} train`;
+      if (pick.route === r) b.classList.add("selected");
       b.onclick = () => { pick.route = r; renderPicker(stationsFound); };
       routes.append(b);
     });
@@ -192,7 +586,9 @@ function renderPicker(stationsFound) {
       dirs.append(b);
     });
   }
-  $("add").hidden = !(pick.station && pick.route && pick.direction);
+  $("routes-step").hidden = !pick.station;
+  $("directions-step").hidden = !(pick.station && pick.route);
+  $("add-step").hidden = !(pick.station && pick.route && pick.direction);
 }
 
 $("search").oninput = async e => {
@@ -212,7 +608,7 @@ $("add").onclick = async () => {
     renderPicker([]);
     refreshWatches();
   } catch (err) {
-    $("status").textContent = "⚠ " + err.message;
+    setStatus(err.message, "error");
   }
 };
 
