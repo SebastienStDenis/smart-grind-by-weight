@@ -150,8 +150,10 @@
     background: var(--bg); border-radius: 12px; border-bottom-color: transparent;
     box-shadow: 0 8px 24px var(--shadow);
   }
-  /* Carries the row from where it was dropped down into its new slot */
-  li.watch.settling { transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+  /* Carries the row from where it was dropped into its new slot. Kept short
+     with an ease-out that actually arrives - a long tail reads as the row
+     hesitating after the mouse is already up. */
+  li.watch.settling { transition: transform 130ms cubic-bezier(0.33, 1, 0.68, 1); }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
@@ -229,9 +231,6 @@
 <main>
 <h1>MTA Gateway</h1>
 
-<h2>Watching</h2>
-<ul id="watches"></ul>
-
 <h2>Add a watch</h2>
 <input id="search" placeholder="Search stations" autocomplete="off" inputmode="search">
 <div class="step" id="results-step" hidden>
@@ -249,6 +248,9 @@
 <div class="step" id="add-step" hidden>
   <button id="add" class="primary">Add watch</button>
 </div>
+
+<h2>Watching</h2>
+<ul id="watches"></ul>
 
 <p id="status"></p>
 </main>
@@ -486,12 +488,11 @@ function endDrag() {
   const rest = () => moved.classList.remove("settling", "drag-active");
   if (settle) {
     moved.style.transform = `translateY(${settle}px)`;
+    void moved.offsetHeight;  // flush that start point, so the settle runs from it this frame
+    moved.classList.add("settling");
+    moved.style.transform = "";
     moved.addEventListener("transitionend", rest, { once: true });
     setTimeout(rest, 400);
-    requestAnimationFrame(() => {
-      moved.classList.add("settling");
-      moved.style.transform = "";
-    });
   } else {
     rest();
   }
