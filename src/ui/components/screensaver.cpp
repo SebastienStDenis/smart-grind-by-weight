@@ -188,7 +188,6 @@ lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t
     return countdown;
 }
 
-// Grouped-view countdown in a rounded tile
 // Width a countdown tile will take once laid out, so a row can be filled to
 // the edge of the screen instead of clipping whatever runs past it
 int countdown_tile_width(const TrainArrivalItem& item, uint8_t mins) {
@@ -204,6 +203,7 @@ int countdown_tile_width(const TrainArrivalItem& item, uint8_t mins) {
     return width;
 }
 
+// Grouped-view countdown in a rounded tile
 void make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
     lv_obj_t* tile = make_countdown(parent, item, mins, kTileCountdownFont);
     lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
