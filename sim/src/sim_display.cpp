@@ -16,6 +16,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 
 #include "config/constants.h"
 
@@ -26,6 +27,9 @@ namespace {
 constexpr float kMinZoom = 0.5f;
 constexpr float kMaxZoom = 4.0f;
 constexpr float kZoomStep = 0.25f;
+
+/* Ceiling on the brightness scrim so a dimmed panel stays legible. */
+constexpr float kMaxScrim = 0.55f;
 
 float window_zoom() {
     const char* setting = std::getenv("SIM_ZOOM");
@@ -257,8 +261,15 @@ void DisplayManager::set_brightness(float brightness) {
 
     ensure_dim_overlay();
 
+    /* A backlight at 35% does not look 65% black: perceived lightness follows
+     * roughly the 1/2.2 power of luminance. Scaling the scrim linearly made the
+     * dimmed screensaver state unreadable, so it is gamma-corrected and capped. */
     static lv_opa_t applied_scrim = LV_OPA_TRANSP;
-    lv_opa_t scrim = (lv_opa_t)((1.0f - brightness) * LV_OPA_COVER);
+    float perceived = powf(brightness, 1.0f / 2.2f);
+    float darkness = 1.0f - perceived;
+    if (darkness > kMaxScrim) darkness = kMaxScrim;
+
+    lv_opa_t scrim = (lv_opa_t)(darkness * LV_OPA_COVER);
     if (scrim == applied_scrim) return;
 
     applied_scrim = scrim;

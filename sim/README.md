@@ -99,9 +99,11 @@ flow.
   `vTaskDelayUntil` is a sleep, not a tick-driven wake. Fine for UI and state
   machine work, wrong for tuning the prediction algorithm.
 - **Core pinning is ignored.** Both "cores" are just threads.
-- **The panel's rounded corners and brightness curve are not reproduced.**
-  Brightness is emulated as a black scrim, which is what the screensaver dim
-  step looks like, but it is not the AMOLED's response.
+- **The panel's rounded corners are not reproduced**, and brightness is
+  emulated by compositing a black scrim rather than driving a backlight. The
+  scrim is gamma-corrected and capped, because perceived lightness follows
+  roughly the 1/2.2 power of luminance and a linear scrim made the dimmed
+  screensaver state far darker than the real panel looks.
 - **Heap figures come from the host**, so System Info reports the Mac's memory
   rather than the ESP32's 512 kB of internal RAM. LVGL's pool is also raised
   from the device's 256 kB to 2 MB, because a full-screen snapshot needs about
