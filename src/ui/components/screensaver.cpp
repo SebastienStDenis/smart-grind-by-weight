@@ -54,9 +54,8 @@ const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
 
 // Page indicator bars stacked down the left edge of a multi-page trains view;
 // narrow enough to cost almost no width but tall enough to read at a glance,
-// held off the edge itself by kPageBarEdgePx and with the rows indented past
-// them by kPageBarClearPx
-constexpr int kPageBarEdgePx = 4;
+// flush against the edge itself with the rows indented past them by
+// kPageBarClearPx
 constexpr int kPageBarWidthPx = 3;
 constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
@@ -286,7 +285,7 @@ void add_page_bars(lv_obj_t* page, int page_count, int active_page) {
     if (page_count <= 1) {
         return;
     }
-    lv_obj_set_style_pad_left(page, kPageBarEdgePx + kPageBarWidthPx + kPageBarClearPx, 0);
+    lv_obj_set_style_pad_left(page, kPageBarWidthPx + kPageBarClearPx, 0);
 
     lv_obj_t* bars = make_flex_container(page, LV_FLEX_FLOW_COLUMN, kPageBarGapPx);
     lv_obj_set_size(bars, kPageBarWidthPx, LV_SIZE_CONTENT);
