@@ -1,0 +1,17 @@
+# Editor configuration for the simulator sources. The firmware under src/ is
+# indexed against the PlatformIO toolchain instead.
+CompileFlags:
+  Add:
+    - -std=gnu++17
+    - -I../sim/include
+    - -I../sim/src
+    - -I../src
+    - -I../include
+    - -I../components/delta/include
+    - -I/opt/homebrew/include
+    - -DLV_CONF_PATH="../sim/lv_conf.h"
+    - -DLV_LVGL_H_INCLUDE_SIMPLE
+    - -DMOCK_BUILD
+    - -DDEBUG_ENABLE_LOADCELL_MOCK=1
+    - -DDEBUG_ENABLE_GRINDER_BACKGROUND_INDICATOR=1
+    - -DSIM_BUILD=1

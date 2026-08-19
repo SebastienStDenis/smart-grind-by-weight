@@ -24,6 +24,10 @@ tools/database/
 tools/database/grinder_data.db
 failed_session_*.bin
 
+# macOS simulator
+sim/build/
+sim/sim_data/
+
 # Git worktrees
 .worktrees/
 
