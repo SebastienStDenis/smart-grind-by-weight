@@ -10,16 +10,6 @@
 
 #include "../include/lv_conf.h"
 
-/* The panel is RGB565, but the simulator renders 32bpp. Homebrew's SDL2 is
- * sdl2-compat on top of SDL3, whose SDL_PIXELFORMAT_RGB565 texture path takes
- * the bytes in the opposite order, which turns greys green and dark glyphs
- * pink while leaving black and white - palindromic in RGB565 - looking right.
- * ARGB8888 is the SDL backend's native texture format, so it avoids the
- * conversion entirely. Only colour precision differs from the device, and no
- * firmware code touches raw pixels. */
-#undef LV_COLOR_DEPTH
-#define LV_COLOR_DEPTH 32
-
 /* Draw into an SDL window instead of the AMOLED panel. */
 #undef LV_USE_SDL
 #define LV_USE_SDL 1
@@ -28,10 +18,14 @@
 #undef LV_USE_SNAPSHOT
 #define LV_USE_SNAPSHOT 1
 #define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
-/* PARTIAL matches the render mode the device's display_manager.cpp uses. */
+/* PARTIAL matches the render mode display_manager.cpp uses on the device. */
 #define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_PARTIAL
-#define LV_SDL_BUF_COUNT        2
-#define LV_SDL_ACCELERATED      1
+#define LV_SDL_BUF_COUNT        1
+/* Software renderer. PARTIAL mode uploads only the flushed area with
+ * SDL_UpdateTexture each frame, which the accelerated (Metal) path under
+ * sdl2-compat renders as horizontal bands. At 280x456 the CPU path costs
+ * nothing, and it also makes the presented frame readable back for snapshots. */
+#define LV_SDL_ACCELERATED      0
 #define LV_SDL_FULLSCREEN       0
 #define LV_SDL_DIRECT_EXIT      1
 #define LV_SDL_MOUSEWHEEL_MODE  LV_SDL_MOUSEWHEEL_MODE_ENCODER

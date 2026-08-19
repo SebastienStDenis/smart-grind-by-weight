@@ -9,11 +9,13 @@
 #include "hardware/display_manager.h"
 
 #include <lvgl.h>
+#include <display/lv_display_private.h>
 #include <SDL2/SDL.h>
 
 #include <Arduino.h>
 
 #include <cstdlib>
+#include <cstring>
 
 #include "config/constants.h"
 
@@ -81,12 +83,43 @@ void maybe_write_snapshot(lv_display_t* display) {
     uint32_t delay_ms = delay_setting ? (uint32_t)strtoul(delay_setting, nullptr, 10) : 3000;
     if (millis() < delay_ms) return;
 
-    (void)display;
     done = true;
+
+    /* SIM_SNAPSHOT_SDL reads back what was actually presented, which is the
+     * only way to see compositing faults; SIM_SNAPSHOT captures LVGL's own
+     * output and so cannot show them. */
+    if (std::getenv("SIM_SNAPSHOT_SDL")) {
+        auto* renderer = static_cast<SDL_Renderer*>(lv_sdl_window_get_renderer(display));
+        if (!renderer) return;
+
+        int width = 0;
+        int height = 0;
+        SDL_GetRendererOutputSize(renderer, &width, &height);
+
+        SDL_Surface* presented = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+                                                                SDL_PIXELFORMAT_ARGB8888);
+        if (!presented) return;
+
+        if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888,
+                                 presented->pixels, presented->pitch) == 0) {
+            SDL_SaveBMP(presented, path);
+            LOG_BLE("[SIM] Presented-frame snapshot written to %s (%dx%d)\n", path, width, height);
+        } else {
+            LOG_BLE("[SIM] Presented-frame snapshot failed: %s\n", SDL_GetError());
+        }
+
+        SDL_FreeSurface(presented);
+        return;
+    }
 
     /* Captured from LVGL rather than the SDL backbuffer, whose contents are
      * undefined after a present. */
-    lv_draw_buf_t* frame = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
+    const char* which = std::getenv("SIM_SNAPSHOT_OBJ");
+    lv_obj_t* target = lv_screen_active();
+    if (which && strcmp(which, "top") == 0) target = lv_layer_top();
+    else if (which && strcmp(which, "sys") == 0) target = lv_layer_sys();
+
+    lv_draw_buf_t* frame = lv_snapshot_take(target, LV_COLOR_FORMAT_ARGB8888);
     if (!frame) {
         LOG_BLE("[SIM] Snapshot failed: lv_snapshot_take returned nothing\n");
         return;
@@ -104,6 +137,18 @@ void maybe_write_snapshot(lv_display_t* display) {
     }
 
     lv_draw_buf_destroy(frame);
+}
+
+/** Homebrew ships sdl2-compat on SDL3, whose RGB565 texture upload takes the
+ *  bytes in the opposite order: greys render green and dark glyphs pink, while
+ *  black and white survive because they are palindromic in RGB565. Swapping
+ *  each flush before the backend sees it cancels that out, and keeps the
+ *  simulator at the panel's real 16bpp depth. */
+lv_display_flush_cb_t backend_flush = nullptr;
+
+void swapping_flush(lv_display_t* display, const lv_area_t* area, uint8_t* px_map) {
+    lv_draw_sw_rgb565_swap(px_map, lv_area_get_width(area) * lv_area_get_height(area));
+    backend_flush(display, area, px_map);
 }
 
 void ensure_dim_overlay() {
@@ -139,9 +184,18 @@ void DisplayManager::init() {
         return;
     }
 
+    /* Setting the zoom reallocates the SDL backend's framebuffer, and the
+     * backend only clears it once during creation, so a redundant call leaves
+     * uninitialised heap on screen. Only change it when it actually differs. */
     active_zoom = window_zoom();
-    lv_sdl_window_set_zoom(lvgl_display, active_zoom);
+    if (active_zoom != lv_sdl_window_get_zoom(lvgl_display)) {
+        lv_sdl_window_set_zoom(lvgl_display, active_zoom);
+    }
     lv_sdl_window_set_title(lvgl_display, "Smart Grind by Weight");
+
+    /* Byte-swap every flush before the backend uploads it; see swapping_flush. */
+    backend_flush = lvgl_display->flush_cb;
+    lv_display_set_flush_cb(lvgl_display, swapping_flush);
 
     touch_driver.init();
     lvgl_input = lv_indev_create();
@@ -154,6 +208,36 @@ void DisplayManager::init() {
     initialized = true;
     LOG_BLE("[DISPLAY] SDL window ready: %ux%u at %.1fx zoom\n",
             (unsigned)screen_width, (unsigned)screen_height, active_zoom);
+
+    /* Window, drawable and LVGL resolution should agree; a mismatch means the
+     * panel is being letterboxed or scaled by the compositor. */
+    int window_w = 0, window_h = 0, render_w = 0, render_h = 0;
+    SDL_GetWindowSize(lv_sdl_window_get_window(lvgl_display), &window_w, &window_h);
+    if (auto* renderer = static_cast<SDL_Renderer*>(lv_sdl_window_get_renderer(lvgl_display))) {
+        SDL_GetRendererOutputSize(renderer, &render_w, &render_h);
+    }
+    LOG_BLE("[DISPLAY] geometry: window %dx%d, drawable %dx%d, lvgl %dx%d\n",
+            window_w, window_h, render_w, render_h,
+            (int)lv_display_get_horizontal_resolution(lvgl_display),
+            (int)lv_display_get_vertical_resolution(lvgl_display));
+
+    /* If LVGL's pixel size and the SDL texture's disagree, only part of the
+     * framebuffer reaches the screen. */
+    lv_color_format_t cf = lv_display_get_color_format(lvgl_display);
+    uint32_t texture_format = 0;
+    int texture_w = 0, texture_h = 0;
+    if (auto* renderer = static_cast<SDL_Renderer*>(lv_sdl_window_get_renderer(lvgl_display))) {
+        SDL_RendererInfo info;
+        if (SDL_GetRendererInfo(renderer, &info) == 0 && info.num_texture_formats > 0) {
+            texture_format = info.texture_formats[0];
+        }
+        (void)texture_w;
+        (void)texture_h;
+    }
+    LOG_BLE("[DISPLAY] format: LV_COLOR_DEPTH=%d cf=%d px_size=%d stride=%d, SDL first fmt=%s\n",
+            (int)LV_COLOR_DEPTH, (int)cf, (int)lv_color_format_get_size(cf),
+            (int)lv_draw_buf_width_to_stride(screen_width, cf),
+            SDL_GetPixelFormatName(texture_format));
 }
 
 void DisplayManager::update() {

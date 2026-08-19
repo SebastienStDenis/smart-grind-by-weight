@@ -45,6 +45,8 @@ or `make run`.
 | `SIM_WIFI_SSID` | Cosmetic; only needs to be non-empty for the gateway config to count as provisioned. Falls back to `WIFI_SSID` in `.env` |
 | `SIM_SNAPSHOT` | Write one BMP of the panel to this path, then carry on |
 | `SIM_SNAPSHOT_MS` | How long to wait before the snapshot, default 3000 |
+| `SIM_SNAPSHOT_SDL` | Capture the frame SDL actually presented instead of LVGL's own output. The only way to see compositing faults |
+| `SIM_SNAPSHOT_OBJ` | `top` or `sys` to capture an overlay layer instead of the active screen |
 
 `sim_data/` holds everything the device keeps in flash: `nvs/` for Preferences
 namespaces and `littlefs/` for grind session logs. Delete it to factory-reset.
@@ -86,11 +88,13 @@ flow.
 
 ## Known differences
 
-- **The simulator renders 32bpp, the panel is RGB565.** Homebrew's SDL2 is
-  sdl2-compat on SDL3, whose RGB565 texture path reverses byte order: greys come
-  out green and dark glyphs pink, while black and white survive because they are
-  palindromic in RGB565. ARGB8888 is the SDL backend's native format and avoids
-  the conversion. Colour precision therefore differs slightly from the device.
+- **Pixels are byte-swapped on the way to SDL.** Homebrew ships `sdl2` as
+  sdl2-compat on top of SDL3, and its RGB565 texture upload takes the bytes in
+  the opposite order: greys render green and dark glyphs pink, while black and
+  white survive because they are palindromic in RGB565. `sim_display.cpp` wraps
+  the backend's flush callback and swaps each buffer first, which cancels it out
+  and keeps the simulator at the panel's real 16bpp depth. Rendering at 32bpp
+  avoids the swap too, but the backend then delivers only half the rows.
 - **Timing is not microsecond-faithful.** macOS schedules the task threads;
   `vTaskDelayUntil` is a sleep, not a tick-driven wake. Fine for UI and state
   machine work, wrong for tuning the prediction algorithm.

@@ -32,6 +32,10 @@ struct SimTask {
     std::atomic<bool> deleted{false};
     std::mutex park_mutex;
     std::condition_variable park_cv;
+
+    ~SimTask() {
+        if (thread.joinable()) thread.detach();
+    }
 };
 
 struct SimQueue {
@@ -52,9 +56,13 @@ std::mutex& registry_mutex() {
     return mutex;
 }
 
+/** Deliberately leaked. Tasks live for the whole process, and running them past
+ *  static destruction is safer than tearing their threads down underneath them:
+ *  destroying a still-joinable std::thread calls std::terminate, which aborted
+ *  the process on every window close. */
 std::vector<std::unique_ptr<SimTask>>& registry() {
-    static std::vector<std::unique_ptr<SimTask>> tasks;
-    return tasks;
+    static auto* tasks = new std::vector<std::unique_ptr<SimTask>>();
+    return *tasks;
 }
 
 thread_local SimTask* current_task = nullptr;
