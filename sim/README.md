@@ -86,6 +86,11 @@ flow.
 
 ## Known differences
 
+- **The simulator renders 32bpp, the panel is RGB565.** Homebrew's SDL2 is
+  sdl2-compat on SDL3, whose RGB565 texture path reverses byte order: greys come
+  out green and dark glyphs pink, while black and white survive because they are
+  palindromic in RGB565. ARGB8888 is the SDL backend's native format and avoids
+  the conversion. Colour precision therefore differs slightly from the device.
 - **Timing is not microsecond-faithful.** macOS schedules the task threads;
   `vTaskDelayUntil` is a sleep, not a tick-driven wake. Fine for UI and state
   machine work, wrong for tuning the prediction algorithm.

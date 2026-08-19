@@ -10,6 +10,16 @@
 
 #include "../include/lv_conf.h"
 
+/* The panel is RGB565, but the simulator renders 32bpp. Homebrew's SDL2 is
+ * sdl2-compat on top of SDL3, whose SDL_PIXELFORMAT_RGB565 texture path takes
+ * the bytes in the opposite order, which turns greys green and dark glyphs
+ * pink while leaving black and white - palindromic in RGB565 - looking right.
+ * ARGB8888 is the SDL backend's native texture format, so it avoids the
+ * conversion entirely. Only colour precision differs from the device, and no
+ * firmware code touches raw pixels. */
+#undef LV_COLOR_DEPTH
+#define LV_COLOR_DEPTH 32
+
 /* Draw into an SDL window instead of the AMOLED panel. */
 #undef LV_USE_SDL
 #define LV_USE_SDL 1
