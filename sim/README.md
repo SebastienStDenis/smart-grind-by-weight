@@ -41,8 +41,10 @@ or `make run`.
 | --- | --- |
 | `SIM_ZOOM` | Initial window scale, 0.5-4.0 (default 1.0) |
 | `SIM_DATA_DIR` | Where NVS and LittleFS live (default `./sim_data`) |
-| `SIM_GATEWAY_URL` | Train gateway base URL, e.g. `http://192.168.1.134:8585` |
-| `SIM_WIFI_SSID` | Cosmetic; only needs to be non-empty for the gateway config to count as provisioned |
+| `SIM_GATEWAY_URL` | Train gateway base URL, e.g. `http://192.168.1.134:8585`. Falls back to `GATEWAY_URL` in the repo's `.env` |
+| `SIM_WIFI_SSID` | Cosmetic; only needs to be non-empty for the gateway config to count as provisioned. Falls back to `WIFI_SSID` in `.env` |
+| `SIM_SNAPSHOT` | Write one BMP of the panel to this path, then carry on |
+| `SIM_SNAPSHOT_MS` | How long to wait before the snapshot, default 3000 |
 
 `sim_data/` holds everything the device keeps in flash: `nvs/` for Preferences
 namespaces and `littlefs/` for grind session logs. Delete it to factory-reset.
@@ -56,6 +58,11 @@ SIM_GATEWAY_URL=http://192.168.1.134:8585 ./build/grinder-sim
 `TrainDataClient` polls that gateway over libcurl and parses the response with
 the same cJSON path as the firmware, so routes, colours, catch dots, paging and
 the stale/expired states are all live.
+
+If `SIM_GATEWAY_URL` is unset the simulator reads `GATEWAY_URL` from the repo's
+`.env`, the same file `grinder.py wifi --set` provisions the device from. That
+file is gitignored, so it does not exist inside a git worktree; pass the
+variable explicitly there.
 
 ## What is substituted
 
@@ -87,8 +94,16 @@ flow.
   Brightness is emulated as a black scrim, which is what the screensaver dim
   step looks like, but it is not the AMOLED's response.
 - **Heap figures come from the host**, so System Info reports the Mac's memory
-  rather than the ESP32's 512 kB of internal RAM. LVGL's own 256 kB pool is
-  kept at its device size, so LVGL allocation pressure is still represented.
+  rather than the ESP32's 512 kB of internal RAM. LVGL's pool is also raised
+  from the device's 256 kB to 2 MB, because a full-screen snapshot needs about
+  500 kB on its own, so LVGL allocation pressure is not represented either.
+- **The mock-hardware background tint is suppressed.** `UIManager::create_ui()`
+  paints the screen dark green (`THEME_COLOR_BACKGROUND_MOCK`) whenever the mock
+  load cell is compiled in, so a bench device cannot be mistaken for real
+  hardware. The simulator needs the mock cell but wants the panel's real
+  colours, so `sim_main.cpp` restores the background. The related
+  `DEBUG_ENABLE_GRINDER_BACKGROUND_INDICATOR` flag, which flips the background
+  to dark yellow while the motor runs, is left off for the same reason.
 - **The scale starts calibrated and zeroed.** The mock cell has a fixed
   calibration factor, and `sim_main.cpp` zeroes it against the mock's known
   empty-pan baseline; otherwise every launch would open on the calibration

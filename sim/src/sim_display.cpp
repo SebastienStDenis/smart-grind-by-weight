@@ -70,6 +70,42 @@ void apply_zoom_keys(lv_display_t* display) {
     }
 }
 
+/** Writes the rendered window to a BMP once, SIM_SNAPSHOT_MS after boot.
+ *  Lets the panel output be inspected without screen-recording permission. */
+void maybe_write_snapshot(lv_display_t* display) {
+    static const char* path = std::getenv("SIM_SNAPSHOT");
+    static bool done = false;
+    if (!path || !*path || done) return;
+
+    const char* delay_setting = std::getenv("SIM_SNAPSHOT_MS");
+    uint32_t delay_ms = delay_setting ? (uint32_t)strtoul(delay_setting, nullptr, 10) : 3000;
+    if (millis() < delay_ms) return;
+
+    (void)display;
+    done = true;
+
+    /* Captured from LVGL rather than the SDL backbuffer, whose contents are
+     * undefined after a present. */
+    lv_draw_buf_t* frame = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
+    if (!frame) {
+        LOG_BLE("[SIM] Snapshot failed: lv_snapshot_take returned nothing\n");
+        return;
+    }
+
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
+        frame->data, frame->header.w, frame->header.h, 32,
+        (int)frame->header.stride, SDL_PIXELFORMAT_ARGB8888);
+
+    if (surface) {
+        SDL_SaveBMP(surface, path);
+        SDL_FreeSurface(surface);
+        LOG_BLE("[SIM] Snapshot written to %s (%dx%d)\n", path,
+                (int)frame->header.w, (int)frame->header.h);
+    }
+
+    lv_draw_buf_destroy(frame);
+}
+
 void ensure_dim_overlay() {
     if (dim_overlay) return;
 
@@ -126,6 +162,7 @@ void DisplayManager::update() {
     apply_zoom_keys(lvgl_display);
     touch_driver.update();
     lv_timer_handler();
+    maybe_write_snapshot(lvgl_display);
 }
 
 void DisplayManager::set_brightness(float brightness) {

@@ -36,8 +36,12 @@ DEFINES := \
 	-DLV_LVGL_H_INCLUDE_SIMPLE \
 	-DMOCK_BUILD \
 	-DDEBUG_ENABLE_LOADCELL_MOCK=1 \
-	-DDEBUG_ENABLE_GRINDER_BACKGROUND_INDICATOR=1 \
 	-DSIM_BUILD=1
+
+# DEBUG_ENABLE_GRINDER_BACKGROUND_INDICATOR is deliberately left off. The -mock
+# PlatformIO env sets it to tint the whole screen dark green for mock hardware
+# and dark yellow while the motor runs, which is useful on a bench device but
+# makes the simulator's colours look wrong. Add it here if you want it back.
 
 WARNINGS := -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated-declarations
 OPT ?= -O1 -g

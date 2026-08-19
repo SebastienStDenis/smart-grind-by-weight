@@ -9,9 +9,12 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <lvgl.h>
 #include <freertos/FreeRTOS.h>
 
 #include <cstdlib>
+#include <fstream>
+#include <string>
 #include <thread>
 
 #include "config/constants.h"
@@ -53,21 +56,62 @@ void zero_simulated_scale() {
     Serial.printf("[SIM] Simulated scale zeroed at raw %d\n", (int)DEBUG_MOCK_BASELINE_RAW);
 }
 
-/** Seeds the gateway config from the environment so the Trains screensaver can
- *  reach a real gateway without going through BLE provisioning. */
+/** UIManager::create_ui() tints the screen dark green whenever the mock load
+ *  cell is compiled in, so a bench device cannot be mistaken for real hardware.
+ *  The simulator needs the mock cell but wants the panel's real colours, so the
+ *  screen's own background is restored. A local style outranks the added one. */
+void restore_panel_background() {
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(THEME_COLOR_BACKGROUND), 0);
+}
+
+/** Reads one key out of the repo's .env, the same file `grinder.py wifi --set`
+ *  provisions the device from. */
+std::string value_from_dotenv(const char* key) {
+    for (const char* candidate : {".env", "../.env"}) {
+        std::ifstream file(candidate);
+        if (!file) continue;
+
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.empty() || line[0] == '#') continue;
+
+            size_t separator = line.find('=');
+            if (separator == std::string::npos) continue;
+            if (line.compare(0, separator, key) != 0) continue;
+
+            std::string value = line.substr(separator + 1);
+            while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) value.pop_back();
+            if (value.size() >= 2 && (value.front() == '"' || value.front() == '\'') && value.back() == value.front()) {
+                value = value.substr(1, value.size() - 2);
+            }
+            return value;
+        }
+    }
+    return std::string();
+}
+
+/** Seeds the gateway config so the Trains screensaver can reach a real gateway
+ *  without going through BLE provisioning. SIM_GATEWAY_URL wins; otherwise the
+ *  repo's .env is used, so the simulator points where the device points. */
 void seed_network_config() {
-    const char* url = std::getenv("SIM_GATEWAY_URL");
-    if (!url || !*url) return;
+    const char* env_url = std::getenv("SIM_GATEWAY_URL");
+    std::string url = (env_url && *env_url) ? env_url : value_from_dotenv("GATEWAY_URL");
+    if (url.empty()) {
+        Serial.printf("[SIM] No train gateway configured - set SIM_GATEWAY_URL or GATEWAY_URL in .env\n");
+        return;
+    }
+
+    const char* env_ssid = std::getenv("SIM_WIFI_SSID");
+    std::string ssid = (env_ssid && *env_ssid) ? env_ssid : value_from_dotenv("WIFI_SSID");
+    if (ssid.empty()) ssid = "sim-host";
 
     Preferences prefs;
     prefs.begin(NET_PREFS_NAMESPACE, false);
-    prefs.putString(NET_PREFS_KEY_GATEWAY_URL, url);
-
-    const char* ssid = std::getenv("SIM_WIFI_SSID");
-    prefs.putString(NET_PREFS_KEY_SSID, (ssid && *ssid) ? ssid : "sim-host");
+    prefs.putString(NET_PREFS_KEY_GATEWAY_URL, url.c_str());
+    prefs.putString(NET_PREFS_KEY_SSID, ssid.c_str());
     prefs.end();
 
-    Serial.printf("[SIM] Train gateway: %s\n", url);
+    Serial.printf("[SIM] Train gateway: %s\n", url.c_str());
 }
 
 void print_banner() {
@@ -95,6 +139,7 @@ int main(int argc, char** argv) {
     sim_set_main_thread_task(kUITaskName);
 
     setup();
+    restore_panel_background();
     zero_simulated_scale();
 
     std::thread housekeeping([] {
