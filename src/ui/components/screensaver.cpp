@@ -47,7 +47,7 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardHeaderTopPx = 26;
+constexpr int kBoardHeaderTopPx = 18;
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
@@ -123,8 +123,8 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
     return obj;
 }
 
-// The board's rows start below the "mins" header, which hangs clear of the
-// display's rounded corner by kBoardHeaderTopPx
+// The board's rows start below the "mins" header, which sits kBoardHeaderTopPx
+// down from the top so its glyphs clear the display's rounded corner
 int board_pad_top() {
     return kBoardHeaderTopPx + lv_font_get_line_height(kCountdownUnitFont);
 }
