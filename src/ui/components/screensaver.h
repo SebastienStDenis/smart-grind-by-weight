@@ -29,9 +29,10 @@ public:
     bool is_visible() const { return visible_; }
 
 private:
-    // Odd counts on both axes place one dot exactly at screen center,
-    // so the ripple emanates from a single dot
-    static constexpr int kDotSpacingPx = 16;
+    // Odd counts on both axes place one dot exactly at screen center, so the
+    // ripple emanates from a single dot; the spacing is the one that leaves
+    // the outermost dots hard against the 280x456 edges from that center
+    static constexpr int kDotSpacingPx = 17;
     static constexpr int kDotCols = 17;
     static constexpr int kDotRows = 27;
     static constexpr int kShadeCount = 16;
