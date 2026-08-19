@@ -39,12 +39,9 @@ constexpr int kCountdownTileRadiusPx = 10;
 constexpr int kCountdownTilePadPx = 8;
 constexpr int kCatchDotGapPx = 5;
 
-// Grouped entries (52px badge row + tiles gap + 40px tile row) are spaced so four
-// of them span the page's 424px content height; the tiles take the space the
-// gaps give up so the countdowns read from across the room, and the tighter
-// gap inside an entry keeps it grouped against the wider gap between watches
+// The tighter gap inside a grouped entry keeps it grouped against the wider
+// gap between watches
 constexpr int kGroupedTilesGapPx = 4;
-constexpr int kGroupedRowGapPx = 13;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
 constexpr int kBoardHeaderTopPx = 18;
@@ -61,7 +58,6 @@ constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
 
-constexpr int kTrainsPagePadVerPx = 16;
 constexpr int kTrainsPagePadLeftPx = 2;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
@@ -121,6 +117,14 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
     return obj;
+}
+
+// Four entries (each a badge row above a row of countdown tiles) run from the
+// top edge of the screen to the bottom, sharing out everything they don't
+// occupy so that space reads as separation between watches
+int grouped_row_gap() {
+    int entry_height = kBadgeSizePx + kGroupedTilesGapPx + lv_font_get_line_height(kTileCountdownFont);
+    return (HW_DISPLAY_HEIGHT_PX - kMaxGroupedRows * entry_height) / (kMaxGroupedRows - 1);
 }
 
 // The board's rows start below the "mins" header, which sits kBoardHeaderTopPx
@@ -619,8 +623,7 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_container_ = nullptr;
     }
 
-    grouped_container_ =
-        make_trains_page(grouped_tile_, kGroupedRowGapPx, kTrainsPagePadVerPx, kTrainsPagePadVerPx);
+    grouped_container_ = make_trains_page(grouped_tile_, grouped_row_gap(), 0, 0);
     board_container_ = make_trains_page(board_tile_, board_row_gap(), board_pad_top(), 0);
 
     bool stale = arrivals.gateway_stale || device_stale;
