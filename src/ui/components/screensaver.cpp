@@ -19,7 +19,11 @@ constexpr uint32_t kTrainsTickMs = 1000;                // Arrivals list refresh
 constexpr float kWavePeriodS = 2.4f;                    // Time for one outward wave cycle
 constexpr float kWaveLengthPx = 96.0f;                  // Radial distance between crests
 constexpr float kSecondWaveFrequency = 1.7f;            // Detail wave relative frequency
+constexpr float kSecondWaveSpeed = 1.3f;                // Detail wave relative speed (13/10)
 constexpr float kTwoPi = 6.28318530f;
+// Both waves complete a whole number of cycles over this phase span (10 for the
+// base wave, 13 for the detail wave), so the wrap is seamless
+constexpr float kPhaseWrap = kTwoPi * 10.0f;
 
 constexpr int kVariantCount = 3;
 
@@ -536,8 +540,8 @@ void ScreensaverOverlay::tick_cb(lv_timer_t* timer) {
     }
 
     self->phase_ += kTwoPi * (kWaveTickMs / 1000.0f) / kWavePeriodS;
-    if (self->phase_ >= kTwoPi) {
-        self->phase_ -= kTwoPi;
+    if (self->phase_ >= kPhaseWrap) {
+        self->phase_ -= kPhaseWrap;
     }
     lv_obj_invalidate(self->wave_tile_);
 }
@@ -560,7 +564,8 @@ void ScreensaverOverlay::draw_wave(lv_layer_t* layer) {
         for (int col = 0; col < kDotCols; col++) {
             float distance = static_cast<float>(dot_distance_px_[row * kDotCols + col]);
             float s = 0.5f + 0.35f * sinf(distance * kWaveNumber - phase_) +
-                      0.15f * sinf(distance * kWaveNumber * kSecondWaveFrequency - phase_ * 1.3f);
+                      0.15f * sinf(distance * kWaveNumber * kSecondWaveFrequency -
+                                   phase_ * kSecondWaveSpeed);
             if (s < 0.0f) s = 0.0f;
             if (s > 1.0f) s = 1.0f;
 
