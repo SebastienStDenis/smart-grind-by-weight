@@ -23,6 +23,7 @@ python3 tools/grinder.py analyze
 - `python3 tools/grinder.py wifi --ssid X --password Y --url http://host:8600` - Provision WiFi + train gateway over BLE (no args = status; `--set` provisions from repo-root `.env` with `WIFI_SSID`/`WIFI_PASSWORD`/`GATEWAY_URL`, see `.env.example`, CLI flags override)
 - `python3 tools/grinder.py info` - Get device system information
 - `python3 tools/grinder.py clean` - Clean build artifacts
+- `cd sim && make run` - Build and run the macOS simulator (needs `brew install sdl2 cjson`; see `sim/README.md`)
 
 ## Architecture
 
