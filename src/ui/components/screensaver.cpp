@@ -48,6 +48,7 @@ constexpr int kBoardUnitGapPx = 0;
 // The caption is wider than the digits it sits under, so it, not they, meets
 // the right edge; the board keeps a margin the grouped view's tiles do without
 constexpr int kBoardPadRightPx = 8;
+constexpr const char* kUnitLabelText = "mins";
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
 const lv_font_t* const kTileCountdownFont = &lv_font_montserrat_36;
@@ -62,6 +63,9 @@ constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
 
 constexpr int kTrainsPagePadLeftPx = 2;
+// The panel's rounded corners clip the extreme top and bottom of the screen,
+// so the trains views hold their rows clear of them
+constexpr int kTrainsPagePadVertPx = 4;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
 // the font's 8px descent as empty space below them; shift down by half of it
@@ -95,6 +99,33 @@ uint32_t arrival_catch_color(uint8_t walk_min, uint8_t mins) {
                                    : THEME_COLOR_SCREENSAVER_CATCH_MISS;
 }
 
+// Advance width of an ASCII string
+int32_t text_advance(const char* text, const lv_font_t* font) {
+    int32_t width = 0;
+    for (const char* c = text; *c != '\0'; c++) {
+        width += lv_font_get_glyph_width(font, static_cast<uint32_t>(*c),
+                                         static_cast<uint32_t>(*(c + 1)));
+    }
+    return width;
+}
+
+// How far into its layout box a string's ink starts
+int32_t first_glyph_bearing(const char* text, const lv_font_t* font) {
+    lv_font_glyph_dsc_t dsc;
+    if (!lv_font_get_glyph_dsc(font, &dsc, static_cast<uint32_t>(text[0]), 0)) {
+        return 0;
+    }
+    return dsc.ofs_x;
+}
+
+// Spaces the catch dot off the number's ink rather than off its layout box:
+// narrow digits carry side bearing, and on the board the digits sit centered
+// under the wider "mins" caption, either of which would otherwise leave a
+// wider gap after the dot than the next row has
+void set_catch_dot_gap(lv_obj_t* row, int32_t digits_lead) {
+    lv_obj_set_style_pad_gap(row, kCatchDotGapPx - digits_lead, 0);
+}
+
 // Tiny dot flagging a rushed or missed catch
 lv_obj_t* make_catch_dot(lv_obj_t* parent, uint32_t color) {
     lv_obj_t* dot = lv_obj_create(parent);
@@ -123,12 +154,15 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
     return obj;
 }
 
+// The screen height the rows are laid out in, once the corner margins are taken
+constexpr int kTrainsContentHeightPx = HW_DISPLAY_HEIGHT_PX - 2 * kTrainsPagePadVertPx;
+
 // Four entries (each a badge row above a row of countdown tiles) run from the
-// top edge of the screen to the bottom, sharing out everything they don't
+// top of the content area to the bottom, sharing out everything they don't
 // occupy so that space reads as separation between watches
 int grouped_row_gap() {
     int entry_height = kBadgeSizePx + kGroupedTilesGapPx + lv_font_get_line_height(kTileCountdownFont);
-    return (HW_DISPLAY_HEIGHT_PX - kMaxGroupedRows * entry_height) / (kMaxGroupedRows - 1);
+    return (kTrainsContentHeightPx - kMaxGroupedRows * entry_height) / (kMaxGroupedRows - 1);
 }
 
 // A board row stands as tall as its tallest element: the route bullet, or the
@@ -139,24 +173,24 @@ int board_row_height() {
     return std::max(kBadgeSizePx, countdown_height);
 }
 
-// The whole screen height is shared out between the rows, so the first sits at
-// the top edge and the sixth runs to the bottom
+// The whole content height is shared out between the rows, so the first sits at
+// its top and the sixth runs to its bottom
 int board_row_gap() {
     int rows_height = kMaxBoardRows * board_row_height();
-    return (HW_DISPLAY_HEIGHT_PX - rows_height) / (kMaxBoardRows - 1);
+    return (kTrainsContentHeightPx - rows_height) / (kMaxBoardRows - 1);
 }
 
 // Full-tile column that holds one trains page, rows stacked from the top so
 // the list starts at the same place however many rows it has; non-clickable
 // so taps land on the tile underneath
-lv_obj_t* make_trains_page(lv_obj_t* tile, int32_t gap, int32_t pad_top, int32_t pad_bottom) {
+lv_obj_t* make_trains_page(lv_obj_t* tile, int32_t gap) {
     lv_obj_t* page = lv_obj_create(tile);
     lv_obj_set_size(page, LV_PCT(100), LV_PCT(100));
     lv_obj_align(page, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(page, 0, 0);
-    lv_obj_set_style_pad_top(page, pad_top, 0);
-    lv_obj_set_style_pad_bottom(page, pad_bottom, 0);
+    lv_obj_set_style_pad_top(page, kTrainsPagePadVertPx, 0);
+    lv_obj_set_style_pad_bottom(page, kTrainsPagePadVertPx, 0);
     lv_obj_set_style_pad_left(page, kTrainsPagePadLeftPx, 0);
     lv_obj_set_style_pad_right(page, 0, 0);
     lv_obj_set_layout(page, LV_LAYOUT_FLEX);
@@ -189,18 +223,16 @@ void make_route_badge(lv_obj_t* parent, const TrainArrivalItem& item) {
 // Tiny muted "mins" caption
 lv_obj_t* make_unit_label(lv_obj_t* parent) {
     lv_obj_t* label = lv_label_create(parent);
-    lv_label_set_text(label, "mins");
+    lv_label_set_text(label, kUnitLabelText);
     lv_obj_set_style_text_font(label, kCountdownUnitFont, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(THEME_COLOR_TEXT_SECONDARY), 0);
     return label;
 }
 
 // The big bare minutes
-lv_obj_t* make_countdown_digits(lv_obj_t* parent, uint8_t mins, const lv_font_t* font) {
-    char mins_text[4];
-    snprintf(mins_text, sizeof(mins_text), "%u", mins);
+lv_obj_t* make_countdown_digits(lv_obj_t* parent, const char* text, const lv_font_t* font) {
     lv_obj_t* label = lv_label_create(parent);
-    lv_label_set_text(label, mins_text);
+    lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, font, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(THEME_COLOR_TEXT_PRIMARY), 0);
     return label;
@@ -213,12 +245,16 @@ lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t
     lv_obj_t* countdown = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
     lv_obj_set_width(countdown, LV_SIZE_CONTENT);
 
+    char text[4];
+    snprintf(text, sizeof(text), "%u", mins);
+
     uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
     if (dot_color != kNoCatchWarning) {
         make_catch_dot(countdown, dot_color);
+        set_catch_dot_gap(countdown, first_glyph_bearing(text, font));
     }
 
-    make_countdown_digits(countdown, mins, font);
+    make_countdown_digits(countdown, text, font);
     return countdown;
 }
 
@@ -241,17 +277,27 @@ void make_board_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_
     lv_obj_set_width(wrap, LV_SIZE_CONTENT);
     lv_obj_set_flex_align(wrap, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
+    char text[4];
+    snprintf(text, sizeof(text), "%u", mins);
+
     uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
     if (dot_color != kNoCatchWarning) {
         lv_obj_t* dot = make_catch_dot(wrap, dot_color);
         lv_obj_set_style_margin_top(
             dot, (lv_font_get_line_height(kBoardCountdownFont) - kCatchDotSizePx) / 2, 0);
+
+        // The stack is as wide as the caption, so the digits start half the
+        // difference in
+        int32_t digits_width = text_advance(text, kBoardCountdownFont);
+        int32_t stack_width = std::max(digits_width, text_advance(kUnitLabelText, kCountdownUnitFont));
+        set_catch_dot_gap(wrap, (stack_width - digits_width) / 2 +
+                                    first_glyph_bearing(text, kBoardCountdownFont));
     }
 
     lv_obj_t* stack = make_flex_container(wrap, LV_FLEX_FLOW_COLUMN, kBoardUnitGapPx);
     lv_obj_set_width(stack, LV_SIZE_CONTENT);
 
-    make_countdown_digits(stack, mins, kBoardCountdownFont);
+    make_countdown_digits(stack, text, kBoardCountdownFont);
     make_unit_label(stack);
 }
 
@@ -659,8 +705,8 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
         board_container_ = nullptr;
     }
 
-    grouped_container_ = make_trains_page(grouped_tile_, grouped_row_gap(), 0, 0);
-    board_container_ = make_trains_page(board_tile_, board_row_gap(), 0, 0);
+    grouped_container_ = make_trains_page(grouped_tile_, grouped_row_gap());
+    board_container_ = make_trains_page(board_tile_, board_row_gap());
     lv_obj_set_style_pad_right(board_container_, kBoardPadRightPx, 0);
 
     bool stale = arrivals.gateway_stale || device_stale;
