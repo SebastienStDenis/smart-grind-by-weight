@@ -32,6 +32,11 @@ constexpr int kMaxGroupedRows = 4;
 constexpr int kMaxBoardRows = 6;
 constexpr int kCatchDotSizePx = 6;
 
+constexpr int kTrainsPagePadLeftPx = 2;
+// The panel's rounded corners clip the extreme top and bottom of the screen,
+// so the trains views hold their rows clear of them
+constexpr int kTrainsPagePadVertPx = 4;
+
 // Countdowns follow the MTA platform clocks: big bare minutes, in rounded
 // tiles on the grouped view, with a tiny "mins" as a row label (grouped) or
 // beneath each countdown (board)
@@ -46,8 +51,9 @@ constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
 constexpr int kBoardUnitGapPx = 0;
 // The caption is wider than the digits it sits under, so it, not they, meets
-// the right edge; the board keeps a margin the grouped view's tiles do without
-constexpr int kBoardPadRightPx = 8;
+// the right edge; the board keeps the same margin off it that both views keep
+// off the top and bottom, which the grouped view's tiles do without
+constexpr int kBoardPadRightPx = kTrainsPagePadVertPx;
 constexpr const char* kUnitLabelText = "mins";
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
@@ -61,11 +67,6 @@ constexpr int kPageBarWidthPx = 3;
 constexpr int kPageBarHeightPx = 16;
 constexpr int kPageBarGapPx = 6;
 constexpr int kPageBarClearPx = 8;
-
-constexpr int kTrainsPagePadLeftPx = 2;
-// The panel's rounded corners clip the extreme top and bottom of the screen,
-// so the trains views hold their rows clear of them
-constexpr int kTrainsPagePadVertPx = 4;
 
 // The bullet font's glyphs are all cap-height and sit on the baseline, leaving
 // the font's 8px descent as empty space below them; shift down by half of it
