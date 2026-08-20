@@ -50,10 +50,6 @@ constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedTileGapPx = 8;
 constexpr int kGroupedUnitMarginPx = 4;
 constexpr int kBoardUnitGapPx = 0;
-// The caption is wider than the digits it sits under, so it, not they, meets
-// the right edge; the board keeps the same margin off it that both views keep
-// off the top and bottom, which the grouped view's tiles do without
-constexpr int kBoardPadRightPx = kTrainsPagePadVertPx;
 constexpr const char* kUnitLabelText = "mins";
 const lv_font_t* const kCountdownUnitFont = &lv_font_montserrat_14;
 const lv_font_t* const kBoardCountdownFont = &lv_font_montserrat_36;
@@ -708,7 +704,6 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 
     grouped_container_ = make_trains_page(grouped_tile_, grouped_row_gap());
     board_container_ = make_trains_page(board_tile_, board_row_gap());
-    lv_obj_set_style_pad_right(board_container_, kBoardPadRightPx, 0);
 
     bool stale = arrivals.gateway_stale || device_stale;
     if (!have_data) {
