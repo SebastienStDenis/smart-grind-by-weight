@@ -28,23 +28,25 @@ constexpr float kPhaseWrap = kTwoPi * 10.0f;
 constexpr int kVariantCount = 3;
 
 constexpr int kBadgeSizePx = 52;
-constexpr int kMaxGroupedRows = 4;
+constexpr int kMaxGroupedRows = 3;
 constexpr int kMaxBoardRows = 6;
 constexpr int kCatchDotSizePx = 6;
 
-// Countdowns follow the MTA platform clocks: big bare minutes, in rounded
-// tiles on the grouped view, with a tiny "mins" as a row label (grouped) or
-// beneath each countdown (board)
+// Countdowns follow the MTA platform clocks: big bare minutes under a tiny
+// "mins" caption, in rounded tiles on the grouped view and bare on the board
 constexpr int kCountdownTileRadiusPx = 10;
 constexpr int kCountdownTilePadPx = 8;
+// The digits carry more empty line box above them than the caption does below,
+// so the tile makes up the difference under the caption to sit the pair
+// centered between its edges
+constexpr int kCountdownTilePadBottomPx = 4;
 constexpr int kCatchDotGapPx = 5;
 
 // The tighter gap inside a grouped entry keeps it grouped against the wider
 // gap between watches
 constexpr int kGroupedTilesGapPx = 4;
 constexpr int kGroupedTileGapPx = 8;
-constexpr int kGroupedUnitMarginPx = 4;
-constexpr int kBoardUnitGapPx = 0;
+constexpr int kCountdownUnitGapPx = 0;
 // The caption is wider than the digits it sits under, so it, not they, meets
 // the right edge; the board keeps a margin the grouped view's tiles do without
 constexpr int kBoardPadRightPx = 8;
@@ -157,20 +159,25 @@ lv_obj_t* make_flex_container(lv_obj_t* parent, lv_flex_flow_t flow, int32_t gap
 // The screen height the rows are laid out in, once the corner margins are taken
 constexpr int kTrainsContentHeightPx = HW_DISPLAY_HEIGHT_PX - 2 * kTrainsPagePadVertPx;
 
-// Four entries (each a badge row above a row of countdown tiles) run from the
+// A countdown stands as tall as its digits plus the "mins" caption beneath them
+int countdown_height(const lv_font_t* font) {
+    return lv_font_get_line_height(font) + kCountdownUnitGapPx +
+           lv_font_get_line_height(kCountdownUnitFont);
+}
+
+// The entries (each a badge row above a row of countdown tiles) run from the
 // top of the content area to the bottom, sharing out everything they don't
 // occupy so that space reads as separation between watches
 int grouped_row_gap() {
-    int entry_height = kBadgeSizePx + kGroupedTilesGapPx + lv_font_get_line_height(kTileCountdownFont);
+    int entry_height = kBadgeSizePx + kGroupedTilesGapPx + countdown_height(kTileCountdownFont) +
+                       kCountdownTilePadBottomPx;
     return (kTrainsContentHeightPx - kMaxGroupedRows * entry_height) / (kMaxGroupedRows - 1);
 }
 
 // A board row stands as tall as its tallest element: the route bullet, or the
-// countdown with its "mins" caption beneath the digits
+// countdown
 int board_row_height() {
-    int countdown_height = lv_font_get_line_height(kBoardCountdownFont) + kBoardUnitGapPx +
-                           lv_font_get_line_height(kCountdownUnitFont);
-    return std::max(kBadgeSizePx, countdown_height);
+    return std::max(kBadgeSizePx, countdown_height(kBoardCountdownFont));
 }
 
 // The whole content height is shared out between the rows, so the first sits at
@@ -238,41 +245,13 @@ lv_obj_t* make_countdown_digits(lv_obj_t* parent, const char* text, const lv_fon
     return label;
 }
 
-// The minutes and, when the catch is hard, a dot to their left, only as wide
-// as their content
+// The minutes stacked over their own "mins" caption, and when the catch is
+// hard a dot alongside. The digits and the caption are centered on each other
+// inside the stack, so the caption sits square under the digits whatever their
+// width, and a catch dot alongside the stack cannot pull it off center. The dot
+// rides down to the digits' own center line rather than the taller stack's
 lv_obj_t* make_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins,
                          const lv_font_t* font) {
-    lv_obj_t* countdown = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
-    lv_obj_set_width(countdown, LV_SIZE_CONTENT);
-
-    char text[4];
-    snprintf(text, sizeof(text), "%u", mins);
-
-    uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
-    if (dot_color != kNoCatchWarning) {
-        make_catch_dot(countdown, dot_color);
-        set_catch_dot_gap(countdown, first_glyph_bearing(text, font));
-    }
-
-    make_countdown_digits(countdown, text, font);
-    return countdown;
-}
-
-// Grouped-view countdown in a rounded tile
-void make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
-    lv_obj_t* tile = make_countdown(parent, item, mins, kTileCountdownFont);
-    lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
-    lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
-    lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
-    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-}
-
-// Board-view countdown: the minutes stacked over their own "mins" caption. The
-// two are centered on each other inside the stack, so the caption sits square
-// under the digits whatever their width, and a catch dot alongside the stack
-// cannot pull it off center. The dot rides down to the digits' own center line
-// rather than the taller stack's
-void make_board_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
     lv_obj_t* wrap = make_flex_container(parent, LV_FLEX_FLOW_ROW, kCatchDotGapPx);
     lv_obj_set_width(wrap, LV_SIZE_CONTENT);
     lv_obj_set_flex_align(wrap, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
@@ -283,22 +262,36 @@ void make_board_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_
     uint32_t dot_color = arrival_catch_color(item.walk_min, mins);
     if (dot_color != kNoCatchWarning) {
         lv_obj_t* dot = make_catch_dot(wrap, dot_color);
-        lv_obj_set_style_margin_top(
-            dot, (lv_font_get_line_height(kBoardCountdownFont) - kCatchDotSizePx) / 2, 0);
+        lv_obj_set_style_margin_top(dot, (lv_font_get_line_height(font) - kCatchDotSizePx) / 2, 0);
 
         // The stack is as wide as the caption, so the digits start half the
         // difference in
-        int32_t digits_width = text_advance(text, kBoardCountdownFont);
+        int32_t digits_width = text_advance(text, font);
         int32_t stack_width = std::max(digits_width, text_advance(kUnitLabelText, kCountdownUnitFont));
-        set_catch_dot_gap(wrap, (stack_width - digits_width) / 2 +
-                                    first_glyph_bearing(text, kBoardCountdownFont));
+        set_catch_dot_gap(wrap, (stack_width - digits_width) / 2 + first_glyph_bearing(text, font));
     }
 
-    lv_obj_t* stack = make_flex_container(wrap, LV_FLEX_FLOW_COLUMN, kBoardUnitGapPx);
+    lv_obj_t* stack = make_flex_container(wrap, LV_FLEX_FLOW_COLUMN, kCountdownUnitGapPx);
     lv_obj_set_width(stack, LV_SIZE_CONTENT);
 
-    make_countdown_digits(stack, text, kBoardCountdownFont);
+    make_countdown_digits(stack, text, font);
     make_unit_label(stack);
+    return wrap;
+}
+
+// Grouped-view countdown in a rounded tile
+void make_countdown_tile(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
+    lv_obj_t* tile = make_countdown(parent, item, mins, kTileCountdownFont);
+    lv_obj_set_style_pad_hor(tile, kCountdownTilePadPx, 0);
+    lv_obj_set_style_pad_bottom(tile, kCountdownTilePadBottomPx, 0);
+    lv_obj_set_style_radius(tile, kCountdownTileRadiusPx, 0);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(THEME_COLOR_SCREENSAVER_PILL_BG), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+}
+
+// Board-view countdown, bare against the row's right edge
+void make_board_countdown(lv_obj_t* parent, const TrainArrivalItem& item, uint8_t mins) {
+    make_countdown(parent, item, mins, kBoardCountdownFont);
 }
 
 // Direction + optional station, stacked; grows to fill the space between the
@@ -726,10 +719,10 @@ void ScreensaverOverlay::rebuild_trains_views(const TrainArrivals& arrivals, boo
 }
 
 // One entry per watch, in gateway order: bullet + destination/station, then a
-// full-width row of countdown tiles with every arrival. Trains arriving right
-// now show as 0 min; only trains the local countdown has pushed past due are
-// dropped, and watches left empty are hidden. Watches beyond one screenful
-// are split across pages the user swipes between.
+// row of countdown tiles with every arrival. Trains arriving right now show as
+// 0 min; only trains the local countdown has pushed past due are dropped, and
+// watches left empty are hidden. Watches beyond one screenful are split across
+// pages the user swipes between.
 int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals& arrivals,
                                            uint32_t elapsed_min, bool stale) {
     WatchEntry entries[NET_MAX_ARRIVAL_ITEMS];
@@ -748,7 +741,7 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         }
     }
 
-    // Pages fill to capacity in order (five watches show as 4+1) so a watch
+    // Pages fill to capacity in order (four watches show as 3+1) so a watch
     // stays on the same page as the count changes; the stale marker takes
     // the last slot on every page
     int rows_per_page = stale ? kMaxGroupedRows - 1 : kMaxGroupedRows;
@@ -766,16 +759,7 @@ int ScreensaverOverlay::build_grouped_rows(lv_obj_t* parent, const TrainArrivals
         make_route_badge(row, item);
         make_watch_text_column(row, item);
 
-        // The "mins" label sits centered under the route bullet and the tiles
-        // start where the text column does
         lv_obj_t* tiles_row = make_flex_container(entry_box, LV_FLEX_FLOW_ROW, kGroupedTileGapPx);
-        lv_obj_t* unit_label = make_unit_label(tiles_row);
-        lv_obj_set_width(unit_label, kBadgeSizePx);
-        lv_obj_set_style_text_align(unit_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_margin_right(unit_label, kGroupedUnitMarginPx, 0);
-
-        // Tiles this large no longer all fit; the row keeps every arrival and
-        // lets the far-out ones run off the right edge
         for (int m = 0; m < entry.count; m++) {
             make_countdown_tile(tiles_row, item, entry.mins[m]);
         }
