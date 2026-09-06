@@ -1,4 +1,4 @@
-"""Watchlist persistence: a JSON file on the /data volume."""
+"""Stop list persistence: a JSON file on the /data volume."""
 
 import json
 import os

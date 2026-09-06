@@ -67,12 +67,15 @@
   }
   main { max-width: 640px; margin: 0 auto; }
 
-  h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 1.5rem; letter-spacing: -0.01em; }
-  h2 {
-    font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--muted); margin: 2rem 0 0.75rem;
+  header { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.25rem; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+
+  button.icon {
+    width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; border-radius: 50%;
+    justify-content: center; flex: none;
   }
-  h2:first-of-type { margin-top: 0; }
+  button.icon svg { width: 1.1rem; height: 1.1rem; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; fill: none; }
 
   /* Route bullets: bold Helvetica with the glyph cap height at ~55% of the
      diameter, matching official MTA bullets and the grinder's screensaver. The
@@ -133,7 +136,7 @@
   li.watch .actions button:hover:not(:disabled) { color: var(--text); }
   li.watch .actions button:disabled { opacity: 0.25; cursor: default; }
   li.watch .actions button.delete:hover { color: var(--error); }
-  /* touch-action lets the grip claim the gesture, so dragging a watch on a
+  /* touch-action lets the grip claim the gesture, so dragging a stop on a
      phone reorders it instead of scrolling the page */
   li.watch .grip { cursor: grab; touch-action: none; }
   li.watch .grip svg { fill: currentColor; }
@@ -153,6 +156,7 @@
   /* Carries the row from where it was dropped down into its new slot */
   li.watch.settling { transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
   li.empty { color: var(--muted); padding: 0.5rem 0; }
+  li.empty button { padding: 0 0.15rem; min-height: 0; background: none; color: var(--text); font-weight: 600; }
 
   /* Countdowns follow the grinder's MTA platform clocks: big bare minutes in
      rounded tiles led by a single tiny "mins" label, with a small muted dot
@@ -208,10 +212,62 @@
   button .bullets { display: inline-flex; gap: 0.2rem; }
   button .label { overflow-wrap: anywhere; }
 
-  .step { margin: 0.9rem 0; }
-  .step[hidden] { display: none; }
+  .step { margin: 1.1rem 0 0; }
   .step-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
   .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+  /* The add-a-stop popup: a bottom sheet on phones, a centred card on wider
+     screens. The station list scrolls inside it so the search box and the
+     footer stay put. */
+  dialog {
+    position: fixed; inset: auto 0 0; margin: 0; width: 100%; max-width: 100%;
+    max-height: 88dvh; padding: 0; border: 0; border-radius: 20px 20px 0 0;
+    background: var(--surface); color: var(--text);
+    box-shadow: 0 -8px 32px var(--shadow);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+  dialog[open] { display: flex; flex-direction: column; }
+  .pane { display: flex; flex-direction: column; min-height: 0; }
+  .pane[hidden] { display: none; }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 1rem 1rem 0.75rem;
+  }
+  .sheet-head .icon { width: 2rem; height: 2rem; }
+  .sheet-head .icon svg { width: 0.9rem; height: 0.9rem; }
+  .sheet-body { padding: 0 1rem; min-height: 0; display: flex; flex-direction: column; }
+  .sheet-foot { padding: 1rem; display: flex; justify-content: flex-end; }
+  #search { flex: none; }
+  ul.stations { overflow-y: auto; min-height: 0; margin: 0.5rem -0.5rem 0; padding: 0 0.5rem 0.75rem; }
+  ul.stations li.empty { padding: 0.75rem 0.4rem; }
+  button.station {
+    width: 100%; padding: 0.55rem 0.6rem; min-height: 0;
+    background: none; border-radius: 12px; gap: 0.75rem; justify-content: space-between;
+  }
+  button.station:hover { background: var(--pill); }
+  button.station .name { min-width: 0; overflow-wrap: anywhere; }
+  button.station .borough { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+  button.station .bullets { flex: none; }
+  /* Same content as a station row, without the affordance, heading the
+     line/direction picks */
+  .picked { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .picked .name { font-size: 1.1rem; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .picked .borough { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+  .picked .bullets { display: inline-flex; gap: 0.2rem; flex: none; }
+  button.back {
+    align-self: flex-start; padding: 0 0.3rem; margin: 0 0 0.75rem -0.3rem; min-height: 2rem;
+    background: none; color: var(--muted); font-size: 0.9rem;
+  }
+  button.back:hover { color: var(--text); background: none; }
+  button.primary:disabled { opacity: 0.4; cursor: default; filter: none; }
+  .note { color: var(--error); font-size: 0.85rem; margin: 0.9rem 0 0; min-height: 1.2em; }
+
+  @media (min-width: 560px) {
+    dialog {
+      inset: 0; margin: auto; width: 460px; max-height: 80vh; border-radius: 20px;
+      box-shadow: 0 16px 48px var(--shadow);
+    }
+  }
 
   #status { color: var(--muted); font-size: 0.85rem; margin: 2.5rem 0 0; }
   #status.warn { color: var(--warning); }
@@ -219,7 +275,8 @@
 
   @media (max-width: 420px) {
     body { padding: 1rem 0.85rem 2.5rem; }
-    h1 { font-size: 1.3rem; margin-bottom: 1.25rem; }
+    header { margin-bottom: 1rem; }
+    h1 { font-size: 1.3rem; }
     li.watch { column-gap: 0.7rem; }
     li.watch .bullet { width: 2.5rem; height: 2.5rem; font-size: 1.9rem; }
   }
@@ -227,31 +284,48 @@
 </head>
 <body>
 <main>
-<h1>MTA Gateway</h1>
+<header>
+  <h1>MTA Gateway</h1>
+  <button id="open-add" class="icon" title="Add a stop" aria-label="Add a stop">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+  </button>
+</header>
 
-<h2>Add a watch</h2>
-<input id="search" placeholder="Search stations" autocomplete="off" inputmode="search">
-<div class="step" id="results-step" hidden>
-  <div class="step-label">Station</div>
-  <div class="row" id="results"></div>
-</div>
-<div class="step" id="routes-step" hidden>
-  <div class="step-label">Line</div>
-  <div class="row" id="routes"></div>
-</div>
-<div class="step" id="directions-step" hidden>
-  <div class="step-label">Direction</div>
-  <div class="row" id="directions"></div>
-</div>
-<div class="step" id="add-step" hidden>
-  <button id="add" class="primary">Add watch</button>
-</div>
-
-<h2>Watching</h2>
 <ul id="watches"></ul>
 
 <p id="status"></p>
 </main>
+
+<dialog id="add-dialog" aria-labelledby="add-title">
+  <div class="sheet-head">
+    <h2 id="add-title">Add a stop</h2>
+    <button id="close-add" class="icon" title="Close" aria-label="Close">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body pane" id="stations-pane">
+    <input id="search" placeholder="Search stations" autocomplete="off" inputmode="search" autofocus>
+    <ul class="stations" id="stations"></ul>
+  </div>
+  <div class="pane" id="details-pane" hidden>
+    <div class="sheet-body">
+      <button id="back" class="back">← All stations</button>
+      <div class="picked" id="picked"></div>
+      <div class="step">
+        <div class="step-label">Line</div>
+        <div class="row" id="routes"></div>
+      </div>
+      <div class="step">
+        <div class="step-label">Direction</div>
+        <div class="row" id="directions"></div>
+      </div>
+      <p class="note" id="add-note"></p>
+    </div>
+    <div class="sheet-foot">
+      <button id="add" class="primary" disabled>Add stop</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 const COLORS = {
@@ -281,6 +355,7 @@ const GRIP_SVG =
   [3, 8, 13].map(y => `<circle cx="2" cy="${y}" r="1.5"/><circle cx="8" cy="${y}" r="1.5"/>`).join("") +
   "</svg>";
 
+const BOROUGHS = { Bx: "Bronx", M: "Manhattan", Bk: "Brooklyn", Q: "Queens", SI: "Staten Island" };
 let pick = { station: null, route: null, direction: null };
 
 async function api(path, opts) {
@@ -319,11 +394,11 @@ function arrivalsEl(watch, mins, index) {
 
 // A grip to drag the row and a button to remove it. The list order is what the
 // grinder's grouped screensaver page renders, so reordering here reorders the
-// watches on the device.
+// stops on the device.
 //
 // Handlers read the row's live position rather than the index they were built
 // with, so a drop that reorders the DOM before the server confirms can't make a
-// later click act on the wrong watch.
+// later click act on the wrong stop.
 const rowIndex = node => [...$("watches").children].indexOf(node.closest("li.watch"));
 
 function actionsEl(index, count) {
@@ -332,7 +407,7 @@ function actionsEl(index, count) {
   const grip = el("button", {
     className: "grip",
     title: "Drag to reorder",
-    ariaLabel: `Reorder watch ${index + 1} of ${count}, or press the arrow keys`,
+    ariaLabel: `Reorder stop ${index + 1} of ${count}, or press the arrow keys`,
     disabled: count < 2,
   });
   grip.innerHTML = GRIP_SVG;
@@ -346,7 +421,7 @@ function actionsEl(index, count) {
   };
   box.append(grip);
 
-  const del = el("button", { className: "delete", title: "Remove watch", ariaLabel: "Remove watch" }, "\u2715");
+  const del = el("button", { className: "delete", title: "Remove stop", ariaLabel: "Remove stop" }, "\u2715");
   del.onclick = async e => {
     await api(`/api/watches/${rowIndex(e.currentTarget)}`, { method: "DELETE" });
     refreshWatches();
@@ -442,7 +517,7 @@ function updateDrag() {
 }
 
 // Keep scrolling while the pointer rests near the top or bottom of the screen,
-// so a watch can be dragged past the edge of a phone screen
+// so a stop can be dragged past the edge of a phone screen
 function autoScroll() {
   const edge = 72;
   const speed = drag.clientY < edge ? -12
@@ -537,7 +612,13 @@ async function refreshWatches() {
   }
   const list = $("watches");
   list.replaceChildren();
-  if (!watches.length) list.append(el("li", { className: "empty" }, "Nothing yet. Add a watch below."));
+  if (!watches.length) {
+    const empty = el("li", { className: "empty" }, "Nothing yet. Tap ");
+    const plus = el("button", {}, "+");
+    plus.onclick = openAdd;
+    empty.append(plus, " to add a stop.");
+    list.append(empty);
+  }
   watches.forEach((w, i) => {
     const li = el("li", { className: "watch" });
     const mins = arrivals.items[i]?.mins || [];
@@ -553,48 +634,109 @@ async function refreshWatches() {
   else setStatus(`MTA data updated ${arrivals.age_s}s ago`);
 }
 
-function renderPicker(stationsFound) {
-  const results = $("results");
-  results.replaceChildren();
-  stationsFound.forEach(s => {
-    const b = el("button", {});
-    const bullets = el("span", { className: "bullets" });
-    s.routes.forEach(r => bullets.append(bullet(r, "span", true)));
-    b.append(el("span", { className: "label" }, s.name), bullets);
-    if (pick.station?.stop_id === s.stop_id) b.classList.add("selected");
-    b.onclick = () => { pick = { station: s, route: null, direction: null }; renderPicker(stationsFound); };
-    results.append(b);
+// Add-a-stop popup. The whole station directory is fetched once and kept in
+// natural name order (so "103 St" follows "96 St" rather than "1 Av"); typing
+// narrows it in place. Picking a station swaps the list for its line and
+// direction choices.
+let directory = null;
+const byName = (a, b) => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" });
+
+function stationText(s, tag = "span") {
+  const text = el(tag, { className: "name" }, s.name);
+  text.append(el("span", { className: "borough" }, BOROUGHS[s.borough] || s.borough));
+  return text;
+}
+
+function stationBullets(s) {
+  const bullets = el("span", { className: "bullets" });
+  s.routes.forEach(r => bullets.append(bullet(r, "span", true)));
+  return bullets;
+}
+
+function renderStations() {
+  const list = $("stations");
+  list.replaceChildren();
+  if (!directory) {
+    list.append(el("li", { className: "empty" }, "Loading stations…"));
+    return;
+  }
+  const q = $("search").value.trim().toLowerCase();
+  const found = q ? directory.filter(s => s.name.toLowerCase().includes(q)) : directory;
+  if (!found.length) list.append(el("li", { className: "empty" }, "No stations match"));
+  found.forEach(s => {
+    const b = el("button", { className: "station" });
+    b.append(stationText(s), stationBullets(s));
+    b.onclick = () => selectStation(s);
+    const li = el("li");
+    li.append(b);
+    list.append(li);
   });
-  $("results-step").hidden = !stationsFound.length;
+}
+
+function selectStation(station) {
+  // A single-line station needs no line pick, so it is made up front
+  pick = { station, route: station.routes.length === 1 ? station.routes[0] : null, direction: null };
+  $("stations-pane").hidden = true;
+  $("details-pane").hidden = false;
+  renderDetails();
+}
+
+function renderDetails() {
+  const { station } = pick;
+  $("picked").replaceChildren(stationText(station, "div"), stationBullets(station));
 
   const routes = $("routes");
   routes.replaceChildren();
+  station.routes.forEach(r => {
+    const b = bullet(r, "button");
+    b.title = `${r} train`;
+    if (pick.route === r) b.classList.add("selected");
+    b.onclick = () => { pick.route = r; renderDetails(); };
+    routes.append(b);
+  });
+
   const dirs = $("directions");
   dirs.replaceChildren();
-  if (pick.station) {
-    pick.station.routes.forEach(r => {
-      const b = bullet(r, "button");
-      b.title = `${r} train`;
-      if (pick.route === r) b.classList.add("selected");
-      b.onclick = () => { pick.route = r; renderPicker(stationsFound); };
-      routes.append(b);
-    });
-    [["N", pick.station.north], ["S", pick.station.south]].forEach(([d, label]) => {
-      const b = el("button", {}, `→ ${label}`);
-      if (pick.direction === d) b.classList.add("selected");
-      b.onclick = () => { pick.direction = d; renderPicker(stationsFound); };
-      dirs.append(b);
-    });
-  }
-  $("routes-step").hidden = !pick.station;
-  $("directions-step").hidden = !(pick.station && pick.route);
-  $("add-step").hidden = !(pick.station && pick.route && pick.direction);
+  [["N", station.north], ["S", station.south]].forEach(([d, label]) => {
+    const b = el("button", {}, `→ ${label}`);
+    if (pick.direction === d) b.classList.add("selected");
+    b.onclick = () => { pick.direction = d; renderDetails(); };
+    dirs.append(b);
+  });
+
+  $("add-note").textContent = "";
+  $("add").disabled = !(pick.route && pick.direction);
 }
 
-$("search").oninput = async e => {
+function showStations() {
+  $("details-pane").hidden = true;
+  $("stations-pane").hidden = false;
+  renderStations();
+  $("search").focus();
+}
+
+async function openAdd() {
   pick = { station: null, route: null, direction: null };
-  renderPicker(e.target.value.trim() ? await api(`/api/stations?q=${encodeURIComponent(e.target.value)}`) : []);
-};
+  $("search").value = "";
+  showStations();
+  $("add-dialog").showModal();
+  if (directory) return;
+  try {
+    directory = (await api("/api/stations")).sort(byName);
+  } catch (err) {
+    setStatus("Gateway unreachable: " + err.message, "error");
+    $("add-dialog").close();
+    return;
+  }
+  renderStations();
+}
+
+$("open-add").onclick = openAdd;
+$("close-add").onclick = () => $("add-dialog").close();
+$("back").onclick = showStations;
+$("search").oninput = renderStations;
+// A click on the backdrop lands on the dialog element itself, never on its content
+$("add-dialog").onclick = e => { if (e.target === e.currentTarget) e.currentTarget.close(); };
 
 $("add").onclick = async () => {
   try {
@@ -603,12 +745,10 @@ $("add").onclick = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ route: pick.route, stop_id: pick.station.stop_id, direction: pick.direction }),
     });
-    pick = { station: null, route: null, direction: null };
-    $("search").value = "";
-    renderPicker([]);
+    $("add-dialog").close();
     refreshWatches();
   } catch (err) {
-    setStatus(err.message, "error");
+    $("add-note").textContent = err.message;
   }
 };
 

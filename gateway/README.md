@@ -14,20 +14,21 @@ docker run -d --name mta-gateway --restart unless-stopped \
   ghcr.io/sebastienstdenis/mta-gateway:latest
 ```
 
-Open `http://localhost:8600` to configure which trains to watch: search a
-station, pick a line, pick a direction (shown with friendly labels like
-"→ Manhattan"). Each watch also takes an optional walk time - how many minutes
-it takes to walk to that platform. When set, countdowns carry the same tiny
+Open `http://localhost:8600` to configure which stops to show: tap the `+`
+in the top right, pick a station from the list (it narrows as you type), then a
+line and a direction (shown with friendly labels like "→ Manhattan"). Each
+stop also takes an optional walk time - how many minutes it takes to walk to
+that platform. When set, countdowns carry the same tiny
 catch dot as on the grinder: yellow when only a rushed walk still makes the
 train, red when it can't be caught, no dot when it is reachable at a normal pace.
-Drag a watch by its grip to reorder the list (or focus the grip and use the
+Drag a stop by its grip to reorder the list (or focus the grip and use the
 arrow keys); that order is what the grinder's grouped screensaver page renders.
-The page follows the OS light/dark setting and works on phones. Watches persist
+The page follows the OS light/dark setting and works on phones. Stops persist
 in the `/data` volume.
 
 ## API
 
-`GET /api/arrivals` — what the grinder polls:
+`GET /api/arrivals` — what the grinder polls (one item per stop):
 
 ```json
 {
@@ -41,12 +42,13 @@ in the `/data` volume.
 }
 ```
 
-`mins` are minutes until arrival at the watched stop (up to 4 per watch).
+`mins` are minutes until arrival at that stop (up to 4 per stop).
 `walk_min` is the user-entered walk time to the platform in minutes (null when
 no estimate is set). `stale` is true when the last successful MTA fetch is too
 old to trust.
 
-Also: `GET /api/health`, `GET /api/stations?q=`, `GET/POST /api/watches`,
+Also: `GET /api/health`, `GET /api/stations?q=` (no query lists every station),
+`GET/POST /api/watches`,
 `PATCH /api/watches/{index}` (set/clear `walk_min`),
 `POST /api/watches/{index}/move` (`{"to": n}`, reorders the list),
 `DELETE /api/watches/{index}`.
