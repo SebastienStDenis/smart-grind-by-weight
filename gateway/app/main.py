@@ -1,6 +1,6 @@
 """MTA gateway: polls subway GTFS-realtime feeds and serves a minimal
 arrivals list for the grinder's trains screensaver, plus a small web UI
-for picking which route/station/direction combinations to watch.
+for picking which station/line/direction stops to show.
 """
 
 import logging
@@ -49,7 +49,7 @@ class WatchUpdate(BaseModel):
 
 
 class WatchMove(BaseModel):
-    # New position for the watch; the list order is what the grinder's grouped
+    # New position for the stop; the list order is what the grinder's grouped
     # screensaver page renders, so it is the user's running order
     to: int = Field(ge=0)
 
@@ -115,10 +115,10 @@ async def add_watch(watch: Watch) -> list[dict]:
     if watch.route not in station["routes"]:
         raise HTTPException(400, f"route {watch.route} does not stop at {station['name']}")
     if len(watches) >= config.MAX_WATCHES:
-        raise HTTPException(400, f"limit of {config.MAX_WATCHES} watches reached")
+        raise HTTPException(400, f"limit of {config.MAX_WATCHES} stops reached")
     key = (watch.route, watch.stop_id, watch.direction)
     if any((w["route"], w["stop_id"], w["direction"]) == key for w in watches):
-        raise HTTPException(409, "already watching")
+        raise HTTPException(409, "already added")
     entry = watch.model_dump(exclude_none=True)
     watches.append(entry)
     config.save_watches(watches)
@@ -130,7 +130,7 @@ async def add_watch(watch: Watch) -> list[dict]:
 @app.patch("/api/watches/{index}")
 def update_watch(index: int, update: WatchUpdate) -> list[dict]:
     if not 0 <= index < len(watches):
-        raise HTTPException(404, "no such watch")
+        raise HTTPException(404, "no such stop")
     if update.walk_min is None:
         watches[index].pop("walk_min", None)
     else:
@@ -142,7 +142,7 @@ def update_watch(index: int, update: WatchUpdate) -> list[dict]:
 @app.post("/api/watches/{index}/move")
 def move_watch(index: int, move: WatchMove) -> list[dict]:
     if not 0 <= index < len(watches):
-        raise HTTPException(404, "no such watch")
+        raise HTTPException(404, "no such stop")
     if not 0 <= move.to < len(watches):
         raise HTTPException(400, f"position must be 0-{len(watches) - 1}")
     watches.insert(move.to, watches.pop(index))
@@ -153,7 +153,7 @@ def move_watch(index: int, move: WatchMove) -> list[dict]:
 @app.delete("/api/watches/{index}")
 def delete_watch(index: int) -> list[dict]:
     if not 0 <= index < len(watches):
-        raise HTTPException(404, "no such watch")
+        raise HTTPException(404, "no such stop")
     watches.pop(index)
     config.save_watches(watches)
     cache.set_watched_routes({w["route"] for w in watches})

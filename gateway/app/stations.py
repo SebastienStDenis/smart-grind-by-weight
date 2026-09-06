@@ -24,9 +24,10 @@ def get(stop_id: str) -> dict | None:
 
 
 def search(query: str, limit: int = 25) -> list[dict]:
+    """Stations whose name contains the query; an empty query lists the whole directory."""
     q = query.strip().lower()
     if not q:
-        return _stations[:limit]
+        return list(_stations)
     hits = [s for s in _stations if q in s["name"].lower()]
     return hits[:limit]
 
